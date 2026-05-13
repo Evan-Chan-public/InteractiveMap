@@ -8,13 +8,16 @@
 
 extern "C" {
 
+// ── Memory helpers ────────────────────────────────────────────────────────────
+
 EMSCRIPTEN_KEEPALIVE void* wasmAlloc(int bytes) { return malloc(bytes); }
 EMSCRIPTEN_KEEPALIVE void  wasmFree(void* ptr)  { free(ptr); }
 
-// FLOODFILL
-// 4-connected
-// pxs : RGBA, width*height*4 bytes
-// mask : width*height bytes
+// ── Flood Fill ────────────────────────────────────────────────────────────────
+// Iterative BFS, 4-connectivity.
+// pixels : RGBA, width*height*4 bytes
+// mask   : output uint8, width*height bytes (caller pre-zeroes)
+// Returns number of pixels filled.
 
 EMSCRIPTEN_KEEPALIVE
 int floodFill(
@@ -60,86 +63,79 @@ int floodFill(
     return filled;
 }
 
-// MARCHING SQUARES
-// Operates on px-grid corners
-// For each filled px:
-// 1. Find boundary edges
-// 2. Walk adjacency graph to produce polygon
-// 
-// Corner (cx, cy) = intersection of pxs (cx-1,cy-1), (cx,cy-1), (cx-1,cy), (cx,cy)
-//Output coordinates are in corner space [0..width] ×
-// [0..height]; the caller scales back to native pixels.
+// ── Moore Neighbourhood Contour Trace ─────────────────────────────────────────
+// Produces an ordered list of boundary pixel centres using Jacob's stopping
+// criterion. Handles single-pixel regions and linear features.
+// outXY   : pre-allocated float array, capacity maxPairs*2 floats
+// Returns number of point pairs written.
+
+static const int MX[8] = { 1, 1, 0,-1,-1,-1, 0, 1 };
+static const int MY[8] = { 0,-1,-1,-1, 0, 1, 1, 1 };
 
 EMSCRIPTEN_KEEPALIVE
 int traceBoundary(
     const uint8_t* mask, int width, int height,
     float* outXY, int maxPairs
 ) {
-    const int cw = width + 1;             // corner-grid width
-    const int numCorners = cw * (height + 1);
+    // Find topmost, then leftmost filled pixel
+    int startX = -1, startY = -1;
+    for (int y = 0; y < height && startX < 0; ++y)
+        for (int x = 0; x < width && startX < 0; ++x)
+            if (mask[y * width + x]) { startX = x; startY = y; }
 
-    // Boundary corners capped at 4 bc of thin-protrusion edge cases
-    std::vector<int>              adj_n(numCorners, 0);
-    std::vector<std::array<int,4>> adj_c(numCorners);
+    if (startX < 0) return 0;
 
-    auto addEdge = [&](int c1, int c2) {
-        if (adj_n[c1] < 4) adj_c[c1][adj_n[c1]++] = c2;
-        if (adj_n[c2] < 4) adj_c[c2][adj_n[c2]++] = c1;
-    };
-
-    for (int py = 0; py < height; ++py) {
-        for (int px = 0; px < width; ++px) {
-            if (!mask[py * width + px]) continue;
-
-            const int tl = py * cw + px;
-            const int tr = py * cw + (px + 1);
-            const int bl = (py + 1) * cw + px;
-            const int br = (py + 1) * cw + (px + 1);
-
-            // Top edge
-            if (py == 0          || !mask[(py - 1) * width + px])       addEdge(tl, tr);
-            // Bottom edge
-            if (py == height - 1 || !mask[(py + 1) * width + px])       addEdge(bl, br);
-            // Left edge
-            if (px == 0          || !mask[py * width + (px - 1)])       addEdge(tl, bl);
-            // Right edge
-            if (px == width - 1  || !mask[py * width + (px + 1)])       addEdge(tr, br);
+    // Single pixel
+    if (mask[startY * width + startX]) {
+        outXY[0] = (float)startX;
+        outXY[1] = (float)startY;
+        // Check if any neighbours exist
+        bool lone = true;
+        for (int d = 0; d < 8 && lone; ++d) {
+            int nx = startX + MX[d], ny = startY + MY[d];
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height && mask[ny * width + nx])
+                lone = false;
         }
+        if (lone) return 1;
     }
 
-    // Find corner
-    int start = -1;
-    for (int i = 0; i < numCorners; ++i) {
-        if (adj_n[i] >= 2) { start = i; break; }
-    }
-    if (start < 0) return 0;
-
-    // Walk boundary
+    int cx = startX, cy = startY;
+    // Entry direction: we approach the start from the left (dir 4 = left),
+    // so backtrack direction is right (dir 0).
+    int prevDir = 6;
     int count = 0;
-    int cur   = start;
-    int prev  = -1;
+    bool first = true;
 
     do {
         if (count >= maxPairs) break;
-        outXY[count * 2]     = (float)(cur % cw);
-        outXY[count * 2 + 1] = (float)(cur / cw);
+        outXY[count * 2]     = (float)cx;
+        outXY[count * 2 + 1] = (float)cy;
         ++count;
 
-        int next = -1;
-        for (int k = 0; k < adj_n[cur]; ++k) {
-            if (adj_c[cur][k] != prev) { next = adj_c[cur][k]; break; }
+        int searchStart = (prevDir + 5) % 8;
+        bool found = false;
+        for (int i = 0; i < 8; ++i) {
+            int d = (searchStart + i) % 8;
+            int nx = cx + MX[d], ny = cy + MY[d];
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height && mask[ny * width + nx]) {
+                prevDir = (d + 4) % 8;
+                cx = nx; cy = ny;
+                found = true;
+                break;
+            }
         }
-        if (next < 0 || next == start) break;
-        prev = cur;
-        cur  = next;
-    } while (true);
+        if (!found) break;
+        first = false;
+    } while (first || cx != startX || cy != startY);
 
     return count;
 }
 
-// RDP SIMPLIFICATION
-// may alias inXY — copy is safe because of in-order write
-// epsilon = max deviation in pixels
+// ── Ramer-Douglas-Peucker Simplification ─────────────────────────────────────
+// inXY    : input  [x0,y0, x1,y1, ...] inCount pairs
+// outXY   : output (may alias inXY — copy is safe because we write in-order)
+// epsilon : max deviation in pixels
+// Returns number of point pairs in output.
 
 static float perpDist2(
     float px, float py,
@@ -158,7 +154,21 @@ static float perpDist2(
     return qx*qx + qy*qy;
 }
 
-// KEEP THIS ITERATIVE or it blows call stack on large inputs
+static void rdpMark(const float* pts, int* keep, int lo, int hi, float eps2) {
+    if (hi <= lo + 1) return;
+    const float ax = pts[lo*2], ay = pts[lo*2+1];
+    const float bx = pts[hi*2], by = pts[hi*2+1];
+    float maxD = 0; int maxI = lo;
+    for (int i = lo + 1; i < hi; ++i) {
+        float d = perpDist2(pts[i*2], pts[i*2+1], ax, ay, bx, by);
+        if (d > maxD) { maxD = d; maxI = i; }
+    }
+    if (maxD > eps2) {
+        keep[maxI] = 1;
+        rdpMark(pts, keep, lo, maxI, eps2);
+        rdpMark(pts, keep, maxI, hi, eps2);
+    }
+}
 
 EMSCRIPTEN_KEEPALIVE
 int simplifyRDP(
@@ -172,36 +182,13 @@ int simplifyRDP(
 
     std::vector<int> keep(inCount, 0);
     keep[0] = keep[inCount - 1] = 1;
-
-    const float eps2 = epsilon * epsilon;
-    std::vector<std::pair<int,int>> work;
-    work.reserve(64);
-    work.push_back({0, inCount - 1});
-
-    while (!work.empty()) {
-        auto [lo, hi] = work.back();
-        work.pop_back();
-        if (hi <= lo + 1) continue;
-
-        const float ax = inXY[lo * 2], ay = inXY[lo * 2 + 1];
-        const float bx = inXY[hi * 2], by = inXY[hi * 2 + 1];
-        float maxD = 0; int maxI = lo;
-        for (int i = lo + 1; i < hi; ++i) {
-            const float d = perpDist2(inXY[i*2], inXY[i*2+1], ax, ay, bx, by);
-            if (d > maxD) { maxD = d; maxI = i; }
-        }
-        if (maxD > eps2) {
-            keep[maxI] = 1;
-            work.push_back({lo, maxI});
-            work.push_back({maxI, hi});
-        }
-    }
+    rdpMark(inXY, keep.data(), 0, inCount - 1, epsilon * epsilon);
 
     int out = 0;
     for (int i = 0; i < inCount; ++i) {
         if (keep[i]) {
-            outXY[out * 2]     = inXY[i * 2];
-            outXY[out * 2 + 1] = inXY[i * 2 + 1];
+            outXY[out*2]   = inXY[i*2];
+            outXY[out*2+1] = inXY[i*2+1];
             ++out;
         }
     }

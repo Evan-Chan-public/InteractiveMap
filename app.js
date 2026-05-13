@@ -1,31 +1,29 @@
 const state = {
   mode: 'display',       // 'display' | 'design'
-  image: null,           // { url, width, height }
+  image: null,           // { url, width, height } once loaded
   annotations: {
-    regions: [],         // [{ id, points, color, label, body }]
-    pins: [],            // [{ id, latlng, label, body }]
+    regions: [],         // [{ id, polygons, color, label, body }]
+    pins:    [],         // [{ id, latlng, label, body }]
   },
   ui: {
-    activeTool: null,    // 'region' | 'pin' | null
-    selected: null,      // { type: 'region'|'pin', id }
-    filter: null,        // future: { regionId }
-    mergeSource: null,   // region id, for picking merge region
-    mergeHover:  null,   // region id, for hovered candidate
+    activeTool: null,    // 'region' | 'pin' | 'wand' | null
+    selected:   null,    // { type: 'region'|'pin', id }
+    filter:     null,    // future: { regionId }
+    mergeSource: null,   // region id, when picking a second region to merge into
+    mergeHover:  null,   // region id currently hovered as a merge candidate
   },
 };
 
-// Leaflet!
+// Leaflet layers keyed by annotation id
 const layers = {
-  pins: {},    // id → L.Marker
-  regions: {}, // id → L.Polygon
+  pins:    {}, // id → L.Marker
+  regions: {}, // id → L.FeatureGroup (one L.Polygon per ring)
 };
 
 // PERSISTENCE
-// Annotations are saved to localStorage
-// Image is reloaded manually
 
-const STORAGE_KEY = 'interactiveMap.annotations.v1';
-let restoredAwaitingImage = false; 
+const STORAGE_KEY = 'interactiveMap.annotations.v2';
+let restoredAwaitingImage = false;
 
 function saveAnnotations() {
   try {
@@ -43,11 +41,24 @@ function scheduleSave() {
 
 function loadAnnotations() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    // Try v2 first, then fall back to v1 with migration
+    const raw = localStorage.getItem(STORAGE_KEY)
+             || localStorage.getItem('interactiveMap.annotations.v1');
     if (!raw) return false;
     const data = JSON.parse(raw);
-    if (Array.isArray(data?.regions)) state.annotations.regions = data.regions;
-    if (Array.isArray(data?.pins))    state.annotations.pins    = data.pins;
+    if (Array.isArray(data?.regions)) {
+      state.annotations.regions = data.regions.map(r => {
+        // Migrate v1: region.points (single ring) → region.polygons (array of rings)
+        if (r.points && !r.polygons) {
+          const { points, groupId, ...rest } = r;
+          return { ...rest, polygons: [points] };
+        }
+        // Strip any leftover groupId from pre-refactor saves
+        const { groupId, ...rest } = r;
+        return rest;
+      });
+    }
+    if (Array.isArray(data?.pins)) state.annotations.pins = data.pins;
     return state.annotations.regions.length > 0 || state.annotations.pins.length > 0;
   } catch (err) {
     console.warn('Could not load annotations:', err);
@@ -57,8 +68,11 @@ function loadAnnotations() {
 
 function clearSavedAnnotations() {
   state.annotations.regions = [];
-  state.annotations.pins = [];
-  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  state.annotations.pins    = [];
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('interactiveMap.annotations.v1');
+  } catch {}
   restoredAwaitingImage = false;
 }
 
@@ -95,37 +109,31 @@ function updatePlaceholder() {
   }
 }
 
-// WASM Worker
+// WASM WORKER
 
-const WINDOW = 1024; // window size (native px)
+const WINDOW = 1024;
 
-let worker = null;
+let worker     = null;
 let workerReady = false;
-let wandPending = false; // true while a fill is in flight
-let wandOffset  = { x: 0, y: 0 }; // top-left of window in native coords
+let wandPending = false;
+let wandOffset  = { x: 0, y: 0 };
 let wandStage   = '';
-let wandStart   = 0;     // performance.now() at trigger time
-let wandTicker  = null;  // setInterval handle for elapsed-time updater
+let wandStart   = 0;
+let wandTicker  = null;
 
 function initWorker() {
   worker = new Worker('./worker.js');
   worker.onmessage = (e) => {
     const msg = e.data;
-    if (msg.type === 'ready') {
-      workerReady = true;
-    } else if (msg.type === 'progress') {
-      wandStage = msg.stage;
-      updateWandTicker(msg);
-    } else if (msg.type === 'result') {
-      stopWandTicker();
-      onWandResult(msg);
-    } else if (msg.type === 'empty') {
-      stopWandTicker();
-      wandPending = false;
+    if      (msg.type === 'ready')    { workerReady = true; }
+    else if (msg.type === 'progress') { wandStage = msg.stage; updateWandTicker(msg); }
+    else if (msg.type === 'result')   { stopWandTicker(); onWandResult(msg); }
+    else if (msg.type === 'empty')    {
+      stopWandTicker(); wandPending = false;
       setWandStatus('No fill — try adjusting tolerance or clicking a different spot.');
-    } else if (msg.type === 'error') {
-      stopWandTicker();
-      wandPending = false;
+    }
+    else if (msg.type === 'error')    {
+      stopWandTicker(); wandPending = false;
       setWandStatus('Error: ' + msg.reason);
     }
   };
@@ -156,8 +164,8 @@ function updateWandTicker(msg) {
   const elapsed = ((performance.now() - wandStart) / 1000).toFixed(1);
   const label   = STAGE_LABEL[wandStage] ?? wandStage;
   let extra = '';
-  if (msg?.filled    != null) extra += ` · ${msg.filled.toLocaleString()} px`;
-  if (msg?.rawCount  != null) extra += ` · ${msg.rawCount.toLocaleString()} corners`;
+  if (msg?.filled   != null) extra += ` · ${msg.filled.toLocaleString()} px`;
+  if (msg?.rawCount != null) extra += ` · ${msg.rawCount.toLocaleString()} corners`;
   setWandStatus(`${label}… ${elapsed}s${extra}`);
 }
 
@@ -172,7 +180,7 @@ function cancelWand() {
   initWorker();
 }
 
-// Preserves reference to the original Image for windows
+// WAND IMG
 
 let sourceImage = null;
 
@@ -184,7 +192,8 @@ const map = L.map('map', {
   maxZoom: 4,
   zoomSnap: 0,
   zoomDelta: 0.5,
-  wheelPxPerZoomLevel: 40, // lower = scroll-wheel zooms further per tick
+  wheelPxPerZoomLevel: 40,
+  zoomAnimation: false,
   attributionControl: false,
 });
 
@@ -193,15 +202,15 @@ let mapBounds    = null;
 
 // DOM
 
-const toolsPanel     = document.getElementById('tools-panel');
-const detailPanel    = document.getElementById('detail-panel');
-const detailContent  = document.getElementById('detail-content');
-const mapPlaceholder = document.getElementById('map-placeholder');
-const btnMode        = document.getElementById('btn-mode');
-const btnUpload      = document.getElementById('tool-upload');
-const uploadInput    = document.getElementById('upload-input');
-const btnRegion      = document.getElementById('tool-region');
-const btnPin         = document.getElementById('tool-pin');
+const toolsPanel        = document.getElementById('tools-panel');
+const detailPanel       = document.getElementById('detail-panel');
+const detailContent     = document.getElementById('detail-content');
+const mapPlaceholder    = document.getElementById('map-placeholder');
+const btnMode           = document.getElementById('btn-mode');
+const btnUpload         = document.getElementById('tool-upload');
+const uploadInput       = document.getElementById('upload-input');
+const btnRegion         = document.getElementById('tool-region');
+const btnPin            = document.getElementById('tool-pin');
 const btnWand           = document.getElementById('tool-wand');
 const wandStatus        = document.getElementById('wand-status');
 const wandTolerance     = document.getElementById('wand-tolerance');
@@ -211,10 +220,12 @@ const btnWandCancel     = document.getElementById('wand-cancel');
 wandTolerance?.addEventListener('input', () => {
   if (wandToleranceVal) wandToleranceVal.textContent = wandTolerance.value;
 });
-
 btnWandCancel?.addEventListener('click', cancelWand);
 
 // MODE
+
+function setMode(mode) {
+  state.mode = mode;
   if (mode === 'design') {
     toolsPanel.classList.remove('hidden');
     btnMode.textContent = 'Switch to Display Mode';
@@ -247,16 +258,15 @@ function setActiveTool(tool) {
 btnRegion.addEventListener('click', () => {
   setActiveTool(state.ui.activeTool === 'region' ? null : 'region');
 });
-
 btnPin.addEventListener('click', () => {
   setActiveTool(state.ui.activeTool === 'pin' ? null : 'pin');
 });
-
 btnWand.addEventListener('click', () => {
   setActiveTool(state.ui.activeTool === 'wand' ? null : 'wand');
 });
 
 // IMG UPLOAD
+
 btnUpload.addEventListener('click', () => uploadInput.click());
 
 uploadInput.addEventListener('change', () => {
@@ -274,7 +284,7 @@ function loadImageFile(file) {
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
-    sourceImage = img; // keep reference for wand window extraction
+    sourceImage = img;
     applyImage(url, img.naturalWidth, img.naturalHeight);
   };
   img.src = url;
@@ -326,11 +336,12 @@ function updatePinLayer(pin) {
 }
 
 // REGIONS
+
 const draw = {
   active:   false,
-  points:   [],   // L.LatLng[]
-  markers:  [],   // temporary vertex markers
-  polyline: null, // preview polyline
+  points:   [],
+  markers:  [],
+  polyline: null,
 };
 
 const REGION_COLORS = [
@@ -342,22 +353,74 @@ function nextColor() {
   return REGION_COLORS[colorIndex++ % REGION_COLORS.length];
 }
 
+// SWATCHES
+
+const SWATCH_COLORS = [
+  '#000000','#434343','#666666','#999999','#cccccc','#e6e6e6','#f3f3f3','#ffffff',
+  '#ff0000','#ff7700','#ffff00','#00cc00','#00cccc','#4a9eff','#7700cc','#ff00cc',
+  '#f4cccc','#fce5cd','#fff2cc','#d9ead3','#d0e0e3','#cfe2f3','#d9d2e9','#ead1dc',
+  '#ea9999','#f9cb9c','#ffe599','#b6d7a8','#a2c4c9','#9fc5e8','#b4a7d6','#d5a6bd',
+  '#cc0000','#e69138','#f1c232','#6aa84f','#45818e','#3d85c8','#674ea7','#a64d79',
+];
+
+function renderSwatchGrid(currentColor) {
+  const cur = (currentColor || '#4a9eff').toLowerCase();
+  const inPreset = SWATCH_COLORS.map(c => c.toLowerCase()).includes(cur);
+  const swatches = SWATCH_COLORS.map(c => {
+    const active = c.toLowerCase() === cur ? ' active' : '';
+    return `<div class="swatch${active}" style="background:${c}" data-color="${c}" title="${c}"></div>`;
+  }).join('');
+  return `
+    <div id="swatch-grid" class="swatch-grid">
+      ${swatches}
+      <div class="swatch swatch-custom${!inPreset ? ' active' : ''}" id="swatch-custom-btn" title="Custom colour">…</div>
+    </div>
+    <input id="edit-color-custom" type="color" value="${currentColor || '#4a9eff'}" style="display:none" />
+  `;
+}
+
+function bindSwatchGrid(annotation) {
+  const grid        = document.getElementById('swatch-grid');
+  const customBtn   = document.getElementById('swatch-custom-btn');
+  const customInput = document.getElementById('edit-color-custom');
+
+  grid.addEventListener('click', (e) => {
+    const swatch = e.target.closest('[data-color]');
+    if (!swatch) return;
+    annotation.color = swatch.dataset.color;
+    customInput.value = annotation.color;
+    grid.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    swatch.classList.add('active');
+    customBtn.classList.remove('active');
+    updateRegionLayer(annotation);
+    scheduleSave();
+  });
+
+  customBtn.addEventListener('click', () => customInput.click());
+
+  customInput.addEventListener('input', (e) => {
+    annotation.color = e.target.value;
+    grid.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+    customBtn.classList.add('active');
+    updateRegionLayer(annotation);
+    scheduleSave();
+  });
+}
+
 function startRegionDraw(latlng) {
   if (!draw.active) {
-    draw.active = true;
+    draw.active  = true;
     draw.points  = [];
     draw.markers = [];
   }
   draw.points.push(latlng);
 
-  // Vertex dot
   const dot = L.circleMarker(latlng, {
     radius: 4, color: '#fff', weight: 1.5,
     fillColor: '#4a9eff', fillOpacity: 1, interactive: false,
   }).addTo(map);
   draw.markers.push(dot);
 
-  // Rebuild polyline
   if (draw.polyline) draw.polyline.remove();
   if (draw.points.length > 1) {
     draw.polyline = L.polyline(draw.points, {
@@ -367,17 +430,14 @@ function startRegionDraw(latlng) {
 }
 
 function commitRegion() {
-  if (draw.points.length < 3) {
-    cancelRegionDraw();
-    return;
-  }
+  if (draw.points.length < 3) { cancelRegionDraw(); return; }
 
   const region = {
-    id:     generateId(),
-    points: draw.points.map(p => ({ lat: p.lat, lng: p.lng })),
-    color:  nextColor(),
-    label:  'New Region',
-    body:   '',
+    id:       generateId(),
+    polygons: [draw.points.map(p => ({ lat: p.lat, lng: p.lng }))],
+    color:    nextColor(),
+    label:    'New Region',
+    body:     '',
   };
   state.annotations.regions.push(region);
   cancelRegionDraw();
@@ -395,17 +455,20 @@ function cancelRegionDraw() {
 }
 
 function mountRegionLayer(region) {
-  const latlngs = region.points.map(p => [p.lat, p.lng]);
-  const poly = L.polygon(latlngs, {
-    color:       region.color,
-    weight:      1.5,
-    fillColor:   region.color,
-    fillOpacity: 0.18,
-  }).addTo(map);
+  const group = L.featureGroup().addTo(map);
 
-  poly.bindTooltip(region.label || 'Region', { sticky: true });
+  for (const ring of region.polygons) {
+    const poly = L.polygon(ring.map(p => [p.lat, p.lng]), {
+      color:       region.color,
+      weight:      1.5,
+      fillColor:   region.color,
+      fillOpacity: 0.18,
+    });
+    poly.bindTooltip(region.label || 'Region', { sticky: true });
+    group.addLayer(poly);
+  }
 
-  poly.on('click', (e) => {
+  group.on('click', (e) => {
     L.DomEvent.stopPropagation(e);
     if (state.ui.mergeSource && state.ui.mergeSource !== region.id) {
       performMerge(state.ui.mergeSource, region.id);
@@ -414,35 +477,36 @@ function mountRegionLayer(region) {
     selectAnnotation('region', region.id);
   });
 
-  poly.on('mouseover', () => {
+  group.on('mouseover', () => {
     if (state.ui.mergeSource && state.ui.mergeSource !== region.id) {
       state.ui.mergeHover = region.id;
       renderDetailPanel();
     }
   });
 
-  poly.on('mouseout', () => {
+  group.on('mouseout', () => {
     if (state.ui.mergeHover === region.id) {
       state.ui.mergeHover = null;
       renderDetailPanel();
     }
   });
 
-  layers.regions[region.id] = poly;
+  layers.regions[region.id] = group;
 }
 
 function updateRegionLayer(region) {
-  const poly = layers.regions[region.id];
-  if (!poly) return;
-  poly.setTooltipContent(region.label || 'Region');
-  poly.setStyle({ color: region.color, fillColor: region.color });
+  const group = layers.regions[region.id];
+  if (!group) return;
+  group.eachLayer(poly => {
+    poly.setTooltipContent(region.label || 'Region');
+    poly.setStyle({ color: region.color, fillColor: region.color });
+  });
 }
 
 // MERGE
-// TODO: Uses polygon-clipping; correct path later for other usrs
 
-function startMerge(targetId) {
-  state.ui.mergeSource = targetId;
+function startMerge(regionId) {
+  state.ui.mergeSource = regionId;
   renderDetailPanel();
 }
 
@@ -452,11 +516,11 @@ function cancelMerge() {
   renderDetailPanel();
 }
 
-// Buffer distance (in native pxs) used to bridge gaps from boundary lines.
-// Bridge width = (2 * buffer − gap)
-// Max = (2 * buffer)
-// 1-4 px recommended, tweak this later for larger imgs
-const MERGE_BUFFER_PX = 1;
+// bridge dist (px); max bridgeable gap = 2×
+const MERGE_BUFFER_PX = 4;
+
+// ring [{lat,lng}] → pc Polygon [[[x,y]]]
+const ringToGeom = (ring) => [ring.map(p => [p.lng, p.lat])];
 
 function performMerge(targetId, sourceId) {
   const target = state.annotations.regions.find(r => r.id === targetId);
@@ -464,67 +528,97 @@ function performMerge(targetId, sourceId) {
   if (!target || !source) { cancelMerge(); return; }
 
   if (typeof polygonClipping === 'undefined') {
-    console.error('polygon-clipping library not loaded');
     setWandStatus('Merge unavailable: polygon library failed to load.');
     cancelMerge();
     return;
   }
 
-  // needed to convert to polygon-clipping format
-  const toGeom = (pts) => [pts.map(p => [p.lng, p.lat])];
-  const targetGeom = toGeom(target.points);
-  const sourceGeom = toGeom(source.points);
-
-  let bridge = [];
-  try {
-    const targetBuf = toGeom(inflatePolygon(target.points, MERGE_BUFFER_PX));
-    const sourceBuf = toGeom(inflatePolygon(source.points, MERGE_BUFFER_PX));
-    bridge = polygonClipping.intersection(targetBuf, sourceBuf);
-  } catch (err) {
-    console.warn('bridge computation failed; merging without bridge:', err);
-    bridge = [];
+  // bridges between every cross-region pair; empty = non-adjacent (kept as separate rings)
+  const bridges = [];
+  for (const tp of target.polygons) {
+    for (const sp of source.polygons) {
+      try {
+        const br = polygonClipping.intersection(
+          ringToGeom(inflatePolygon(tp, MERGE_BUFFER_PX)),
+          ringToGeom(inflatePolygon(sp, MERGE_BUFFER_PX)),
+        );
+        bridges.push(...br); // each element is a Polygon ([[ring,...]])
+      } catch (err) {
+        console.warn('bridge failed for pair, skipping:', err);
+      }
+    }
   }
 
   let merged;
   try {
-    merged = bridge.length
-      ? polygonClipping.union(targetGeom, sourceGeom, bridge)
-      : polygonClipping.union(targetGeom, sourceGeom);
+    merged = polygonClipping.union(
+      ...target.polygons.map(ringToGeom),
+      ...source.polygons.map(ringToGeom),
+      ...bridges,
+    );
   } catch (err) {
-    console.error('polygonClipping.union threw:', err);
+    console.error('union failed:', err);
     setWandStatus('Merge failed: ' + (err.message || 'invalid geometry'));
     cancelMerge();
     return;
   }
-  if (!merged?.length) {
-    setWandStatus('Merge produced no result.');
-    cancelMerge();
-    return;
-  }
+  if (!merged?.length) { cancelMerge(); return; }
 
-  // Keep largest disconnected piece
-  // TODO: Permit disconnected merges
-  let best = merged[0][0];
-  let bestArea = ringArea(best);
-  for (let i = 1; i < merged.length; ++i) {
-    const a = ringArea(merged[i][0]);
-    if (a > bestArea) { best = merged[i][0]; bestArea = a; }
-  }
+  // Each top-level component → one ring. Holes are dropped.
+  target.polygons = merged.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
 
-  target.points = best.map(([lng, lat]) => ({ lat, lng }));
-
-  // Drop src region
   state.annotations.regions = state.annotations.regions.filter(r => r.id !== sourceId);
   layers.regions[sourceId]?.remove();
   delete layers.regions[sourceId];
-
-  // Remount new geometry
   layers.regions[targetId]?.remove();
   delete layers.regions[targetId];
   mountRegionLayer(target);
 
   state.ui.mergeSource = null;
   selectAnnotation('region', targetId);
+  scheduleSave();
+}
+
+// merge adjacent rings within a region (cleanup after duplicate fills / cascading adjacencies)
+function consolidateRegion(regionId) {
+  const region = state.annotations.regions.find(r => r.id === regionId);
+  if (!region || region.polygons.length < 2) return;
+
+  if (typeof polygonClipping === 'undefined') {
+    setWandStatus('Consolidate unavailable: polygon library failed to load.');
+    return;
+  }
+
+  const bridges = [];
+  const polys = region.polygons;
+  for (let i = 0; i < polys.length; i++) {
+    for (let j = i + 1; j < polys.length; j++) {
+      try {
+        const br = polygonClipping.intersection(
+          ringToGeom(inflatePolygon(polys[i], MERGE_BUFFER_PX)),
+          ringToGeom(inflatePolygon(polys[j], MERGE_BUFFER_PX)),
+        );
+        bridges.push(...br);
+      } catch (err) {
+        console.warn('bridge failed for pair, skipping:', err);
+      }
+    }
+  }
+
+  let result;
+  try {
+    result = polygonClipping.union(...polys.map(ringToGeom), ...bridges);
+  } catch (err) {
+    console.error('consolidate union failed:', err);
+    return;
+  }
+  if (!result?.length) return;
+
+  region.polygons = result.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
+  layers.regions[regionId]?.remove();
+  delete layers.regions[regionId];
+  mountRegionLayer(region);
+  selectAnnotation('region', regionId);
   scheduleSave();
 }
 
@@ -536,10 +630,6 @@ function ringArea(ring) {
   return Math.abs(a / 2);
 }
 
-// Offset every vertex outward
-// Very approximate but it will do
-// polygon-clipping can handle self overlap
-
 function inflatePolygon(points, distance) {
   const n = points.length;
   if (n < 3) return points.slice();
@@ -549,9 +639,6 @@ function inflatePolygon(points, distance) {
     const a = points[i], b = points[(i + 1) % n];
     signed += a.lng * b.lat - b.lng * a.lat;
   }
-  // CW (signed < 0) is usual case (trace runs CW in screen ->
-  // CW in lat/lng since lat = −y).
-  // Orient = -1 -> outward = (−edgeY, edgeX).
   const orient = signed > 0 ? 1 : -1;
 
   const result = new Array(n);
@@ -562,7 +649,6 @@ function inflatePolygon(points, distance) {
 
     const e1x = curr.lng - prev.lng, e1y = curr.lat - prev.lat;
     const e2x = next.lng - curr.lng, e2y = next.lat - curr.lat;
-
     const e1Len = Math.hypot(e1x, e1y);
     const e2Len = Math.hypot(e2x, e2y);
     if (e1Len < 1e-9 || e2Len < 1e-9) { result[i] = { ...curr }; continue; }
@@ -580,8 +666,7 @@ function inflatePolygon(points, distance) {
     bx /= bLen; by /= bLen;
 
     const cosHalf = n1x * bx + n1y * by;
-    const factor = cosHalf > 0.05 ? distance / cosHalf : distance * 20;
-
+    const factor  = cosHalf > 0.05 ? distance / cosHalf : distance * 20;
     result[i] = { lng: curr.lng + bx * factor, lat: curr.lat + by * factor };
   }
   return result;
@@ -604,8 +689,6 @@ function triggerWand(latlng) {
   const nativeY = Math.round(-latlng.lat);
   const { width, height } = state.image;
 
-  // Window centred on click
-  // maybe future centre window in selected box?
   const half = Math.floor(WINDOW / 2);
   const x0 = Math.max(0, Math.min(width  - WINDOW, nativeX - half));
   const y0 = Math.max(0, Math.min(height - WINDOW, nativeY - half));
@@ -616,7 +699,6 @@ function triggerWand(latlng) {
   const seedY = nativeY - y0;
   if (seedX < 0 || seedX >= ww || seedY < 0 || seedY >= wh) return;
 
-  // Extract window into temp canvas
   const tmp = document.createElement('canvas');
   tmp.width  = ww;
   tmp.height = wh;
@@ -653,11 +735,11 @@ function onWandResult({ points, simpCount, filled }) {
   }));
 
   const region = {
-    id:     generateId(),
-    points: latlngs,
-    color:  nextColor(),
-    label:  'New Region',
-    body:   '',
+    id:       generateId(),
+    polygons: [latlngs],
+    color:    nextColor(),
+    label:    'New Region',
+    body:     '',
   };
   state.annotations.regions.push(region);
   mountRegionLayer(region);
@@ -687,7 +769,6 @@ function selectAnnotation(type, id) {
   state.ui.selected = { type, id };
   detailPanel.classList.remove('hidden');
   renderDetailPanel();
-  // TODO: apply highlight style to selected layer
 }
 
 function clearSelection() {
@@ -699,15 +780,11 @@ function clearSelection() {
 function renderDetailPanel() {
   const sel = state.ui.selected;
 
-  // Hover preview
   if (state.ui.mergeSource && state.ui.mergeHover
       && state.ui.mergeSource !== state.ui.mergeHover) {
     const source = state.annotations.regions.find(r => r.id === state.ui.mergeSource);
     const target = state.annotations.regions.find(r => r.id === state.ui.mergeHover);
-    if (source && target) {
-      renderMergePreview(source, target);
-      return;
-    }
+    if (source && target) { renderMergePreview(source, target); return; }
   }
 
   if (!sel) {
@@ -715,9 +792,7 @@ function renderDetailPanel() {
     return;
   }
 
-  const list = sel.type === 'region'
-    ? state.annotations.regions
-    : state.annotations.pins;
+  const list = sel.type === 'region' ? state.annotations.regions : state.annotations.pins;
   const annotation = list.find(a => a.id === sel.id);
   if (!annotation) { clearSelection(); return; }
 
@@ -751,21 +826,29 @@ function renderDetailView(annotation) {
 }
 
 function renderDetailEditor(annotation, type) {
-  const colorSwatch = type === 'region'
-    ? `<label class="field-label">Color</label>
-       <input id="edit-color" type="color" class="field-color" value="${annotation.color || '#4a9eff'}" />`
+  const isRegion = type === 'region';
+
+  const colorSwatch = isRegion
+    ? `<label class="field-label">Color</label>${renderSwatchGrid(annotation.color)}`
     : '';
 
-  const mergeBanner = (type === 'region' && state.ui.mergeSource === annotation.id)
+  const mergeBanner = (isRegion && state.ui.mergeSource === annotation.id)
     ? `<div class="merge-banner">
          Click another region to merge into this one.
          <button id="edit-merge-cancel" class="btn-link">Cancel</button>
        </div>`
     : '';
 
-  const mergeBtn = type === 'region'
-    ? `<button id="edit-merge" class="btn-secondary">Merge…</button>`
+  const polyCount = isRegion ? annotation.polygons.length : 0;
+  const polyHint  = isRegion
+    ? `<div class="field-label" style="margin-top:6px">${polyCount} polygon${polyCount === 1 ? '' : 's'}</div>`
     : '';
+
+  const actionBtns = isRegion ? `
+    <button id="edit-merge" class="btn-secondary">Merge…</button>
+    ${polyCount > 1 ? `<button id="edit-consolidate" class="btn-secondary">Consolidate</button>` : ''}
+    <button id="edit-delete" class="btn-danger">Delete</button>
+  ` : `<button id="edit-delete" class="btn-danger">Delete</button>`;
 
   detailContent.innerHTML = `
     <div class="detail-editor">
@@ -776,15 +859,13 @@ function renderDetailEditor(annotation, type) {
              value="${escapeHtml(annotation.label || '')}" placeholder="Label…" />
 
       ${colorSwatch}
+      ${polyHint}
 
       <label class="field-label" for="edit-body">Description <span class="field-hint">(HTML ok)</span></label>
       <textarea id="edit-body" class="field-textarea"
                 placeholder="Description…">${escapeHtml(annotation.body || '')}</textarea>
 
-      <div class="editor-actions">
-        ${mergeBtn}
-        <button id="edit-delete" class="btn-danger">Delete</button>
-      </div>
+      <div class="editor-actions">${actionBtns}</div>
     </div>
   `;
 
@@ -803,13 +884,7 @@ function renderDetailEditor(annotation, type) {
     scheduleSave();
   });
 
-  if (type === 'region') {
-    document.getElementById('edit-color').addEventListener('input', (e) => {
-      annotation.color = e.target.value;
-      updateRegionLayer(annotation);
-      scheduleSave();
-    });
-  }
+  if (isRegion) bindSwatchGrid(annotation);
 
   document.getElementById('edit-delete').addEventListener('click', () => {
     deleteAnnotation(type, annotation.id);
@@ -819,8 +894,10 @@ function renderDetailEditor(annotation, type) {
     startMerge(annotation.id);
   });
 
-  document.getElementById('edit-merge-cancel')?.addEventListener('click', () => {
-    cancelMerge();
+  document.getElementById('edit-merge-cancel')?.addEventListener('click', cancelMerge);
+
+  document.getElementById('edit-consolidate')?.addEventListener('click', () => {
+    consolidateRegion(annotation.id);
   });
 
   labelInput.focus();
@@ -831,16 +908,10 @@ function renderDetailEditor(annotation, type) {
 
 map.on('click', (e) => {
   if (state.mode !== 'design') return;
-
-  if (state.ui.activeTool === 'pin') {
-    addPin(e.latlng);
-  } else if (state.ui.activeTool === 'region') {
-    startRegionDraw(e.latlng);
-  } else if (state.ui.activeTool === 'wand') {
-    triggerWand(e.latlng);
-  } else {
-    clearSelection();
-  }
+  if      (state.ui.activeTool === 'pin')    addPin(e.latlng);
+  else if (state.ui.activeTool === 'region') startRegionDraw(e.latlng);
+  else if (state.ui.activeTool === 'wand')   triggerWand(e.latlng);
+  else                                        clearSelection();
 });
 
 map.on('dblclick', (e) => {
@@ -853,8 +924,8 @@ map.on('dblclick', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  if (draw.active)          cancelRegionDraw();
-  if (state.ui.mergeSource) cancelMerge();
+  if (draw.active)           cancelRegionDraw();
+  if (state.ui.mergeSource)  cancelMerge();
 });
 
 // UTILS
@@ -872,6 +943,8 @@ function escapeHtml(str) {
 }
 
 // INIT
+
+initWorker();
 const hadStored = loadAnnotations();
 if (hadStored) {
   colorIndex = state.annotations.regions.length;
