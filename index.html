@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interactive Map</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Left panel: design tools (hidden in display mode) -->
+  <aside id="tools-panel" class="panel panel-left hidden">
+    <div class="panel-header">Tools</div>
+
+    <div class="tool-group">
+      <button id="tool-upload" class="tool-btn" title="Upload map image">
+        Upload Image
+      </button>
+      <!-- Invisible file input triggered by the button above -->
+      <input type="file" id="upload-input" accept="image/jpeg,image/png" hidden />
+    </div>
+
+    <div class="tool-group">
+      <button id="tool-region" class="tool-btn" title="Draw a region polygon">
+        Add Region
+      </button>
+      <button id="tool-pin" class="tool-btn" title="Place a pin">
+        Add Pin
+      </button>
+      <button id="tool-wand" class="tool-btn" title="Flood-fill a region from a click">
+        Flood Region
+      </button>
+    </div>
+
+    <div class="tool-group" id="wand-options">
+      <label class="field-label">Tolerance <span id="wand-tolerance-val">30</span></label>
+      <input id="wand-tolerance" type="range" min="1" max="120" value="30" class="field-range" />
+      <div id="wand-status" class="wand-status"></div>
+      <button id="wand-cancel" class="btn-danger hidden">Cancel</button>
+    </div>
+
+    <!-- Future tool groups (filtering, etc.) will slot in here -->
+  </aside>
+
+  <!-- Main map canvas -->
+  <main id="map-container">
+    <div id="map"></div>
+
+    <!-- Mode toggle (top-right corner of map) -->
+    <div id="mode-toggle">
+      <button id="btn-mode">Switch to Design Mode</button>
+    </div>
+
+    <!-- Placeholder shown when no image is loaded -->
+    <div id="map-placeholder">
+      <p>No map loaded.<br/>Switch to Design Mode and upload an image.</p>
+    </div>
+  </main>
+
+  <!-- Right panel: annotation details -->
+  <aside id="detail-panel" class="panel panel-right hidden">
+    <div class="panel-header">Details</div>
+    <div id="detail-content">
+      <p class="detail-empty">Click a region or pin to see details.</p>
+    </div>
+  </aside>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/polygon-clipping@0.15.7/dist/polygon-clipping.umd.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
