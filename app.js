@@ -1,119 +1,13 @@
-const state = {
-  mode: 'display',       // 'display' | 'design'
-  image: null,           // { url, width, height } once loaded
-  annotations: {
-    regions: [],         // [{ id, polygons, color, label, body }]
-    pins:    [],         // [{ id, latlng, label, body }]
-  },
-  ui: {
-    activeTool: null,    // 'region' | 'pin' | 'wand' | null
-    selected:   null,    // { type: 'region'|'pin', id }
-    filter:     null,    // future: { regionId }
-    mergeSource: null,   // region id, when picking a second region to merge into
-    mergeHover:  null,   // region id currently hovered as a merge candidate
-  },
-};
-
-// Leaflet layers keyed by annotation id
-const layers = {
-  pins:    {}, // id → L.Marker
-  regions: {}, // id → L.FeatureGroup (one L.Polygon per ring)
-};
-
-// PERSISTENCE
-
-const STORAGE_KEY = 'interactiveMap.annotations.v2';
-let restoredAwaitingImage = false;
-
-function saveAnnotations() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.annotations));
-  } catch (err) {
-    console.warn('Could not save annotations:', err);
-  }
-}
-
-let saveTimer = null;
-function scheduleSave() {
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveAnnotations, 300);
-}
-
-function loadAnnotations() {
-  try {
-    // Try v2 first, then fall back to v1 with migration
-    const raw = localStorage.getItem(STORAGE_KEY)
-             || localStorage.getItem('interactiveMap.annotations.v1');
-    if (!raw) return false;
-    const data = JSON.parse(raw);
-    if (Array.isArray(data?.regions)) {
-      state.annotations.regions = data.regions.map(r => {
-        // Migrate v1: region.points (single ring) → region.polygons (array of rings)
-        if (r.points && !r.polygons) {
-          const { points, groupId, ...rest } = r;
-          return { ...rest, polygons: [points] };
-        }
-        // Strip any leftover groupId from pre-refactor saves
-        const { groupId, ...rest } = r;
-        return rest;
-      });
-    }
-    if (Array.isArray(data?.pins)) state.annotations.pins = data.pins;
-    return state.annotations.regions.length > 0 || state.annotations.pins.length > 0;
-  } catch (err) {
-    console.warn('Could not load annotations:', err);
-    return false;
-  }
-}
-
-function clearSavedAnnotations() {
-  state.annotations.regions = [];
-  state.annotations.pins    = [];
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem('interactiveMap.annotations.v1');
-  } catch {}
-  restoredAwaitingImage = false;
-}
-
-function mountAllAnnotations() {
-  state.annotations.pins.forEach(mountPinLayer);
-  state.annotations.regions.forEach(mountRegionLayer);
-}
-
-function updatePlaceholder() {
-  const ph = document.getElementById('map-placeholder');
-  if (!ph) return;
-  if (state.image) { ph.classList.add('hidden'); return; }
-  ph.classList.remove('hidden');
-
-  if (restoredAwaitingImage) {
-    const r = state.annotations.regions.length;
-    const p = state.annotations.pins.length;
-    const parts = [];
-    if (r) parts.push(`${r} region${r === 1 ? '' : 's'}`);
-    if (p) parts.push(`${p} pin${p === 1 ? '' : 's'}`);
-    ph.innerHTML = `
-      <div class="placeholder-restore">
-        <p>${parts.join(' and ')} restored from your previous session.<br/>
-           Upload the original image to continue.</p>
-        <button id="discard-saved" class="btn-link">Discard saved annotations</button>
-      </div>
-    `;
-    document.getElementById('discard-saved')?.addEventListener('click', () => {
-      clearSavedAnnotations();
-      updatePlaceholder();
-    });
-  } else {
-    ph.innerHTML = '<p>No map loaded.<br/>Switch to Design Mode and upload an image.</p>';
-  }
-}
+import { state, layers, historyStack, navStack, HISTORY_MAX } from './state.js';
+import { generateId, escapeHtml, pinsInRegion,
+         circlePoly, latlngDist, ringToGeom, MERGE_BUFFER_PX, inflatePolygon } from './utils.js';
+import { flags, scheduleSave, loadAnnotations, clearSavedAnnotations } from './persistence.js';
 
 // WASM WORKER
 
 const WINDOW = 1024;
 
-let worker     = null;
+let worker      = null;
 let workerReady = false;
 let wandPending = false;
 let wandOffset  = { x: 0, y: 0 };
@@ -180,8 +74,6 @@ function cancelWand() {
   initWorker();
 }
 
-// WAND IMG
-
 let sourceImage = null;
 
 // MAP SETUP
@@ -200,27 +92,76 @@ const map = L.map('map', {
 let imageOverlay = null;
 let mapBounds    = null;
 
+let brushSizePx      = 30;
+const vertexEdit     = { active: false, regionId: null, handles: [], midHandles: [] };
+let brushCursorLayer = null;
+let brushPainting    = false;
+let brushLastLatLng  = null;
+
 // DOM
 
-const toolsPanel        = document.getElementById('tools-panel');
-const detailPanel       = document.getElementById('detail-panel');
-const detailContent     = document.getElementById('detail-content');
-const mapPlaceholder    = document.getElementById('map-placeholder');
-const btnMode           = document.getElementById('btn-mode');
-const btnUpload         = document.getElementById('tool-upload');
-const uploadInput       = document.getElementById('upload-input');
-const btnRegion         = document.getElementById('tool-region');
-const btnPin            = document.getElementById('tool-pin');
-const btnWand           = document.getElementById('tool-wand');
-const wandStatus        = document.getElementById('wand-status');
-const wandTolerance     = document.getElementById('wand-tolerance');
-const wandToleranceVal  = document.getElementById('wand-tolerance-val');
-const btnWandCancel     = document.getElementById('wand-cancel');
+const toolsPanel       = document.getElementById('tools-panel');
+const detailPanel      = document.getElementById('detail-panel');
+const detailContent    = document.getElementById('detail-content');
+const detailTree       = document.getElementById('detail-tree');
+const mapPlaceholder   = document.getElementById('map-placeholder');
+const btnMode          = document.getElementById('btn-mode');
+const btnUpload        = document.getElementById('tool-upload');
+const uploadInput      = document.getElementById('upload-input');
+const btnRegion        = document.getElementById('tool-region');
+const btnPin           = document.getElementById('tool-pin');
+const btnWand          = document.getElementById('tool-wand');
+const wandStatus       = document.getElementById('wand-status');
+const wandTolerance    = document.getElementById('wand-tolerance');
+const wandToleranceVal = document.getElementById('wand-tolerance-val');
+const btnWandCancel    = document.getElementById('wand-cancel');
+const btnBrush         = document.getElementById('tool-brush');
+const btnEraser        = document.getElementById('tool-eraser');
+const btnEdit          = document.getElementById('tool-edit');
+const wandOptions      = document.getElementById('wand-options');
+const brushControls    = document.getElementById('brush-controls');
+const brushSizeInput   = document.getElementById('brush-size');
+const brushSizeVal     = document.getElementById('brush-size-val');
 
 wandTolerance?.addEventListener('input', () => {
   if (wandToleranceVal) wandToleranceVal.textContent = wandTolerance.value;
 });
 btnWandCancel?.addEventListener('click', cancelWand);
+
+brushSizeInput?.addEventListener('input', () => {
+  brushSizePx = parseInt(brushSizeInput.value, 10);
+  if (brushSizeVal) brushSizeVal.textContent = brushSizePx;
+});
+
+// PLACEHOLDER
+
+function updatePlaceholder() {
+  const ph = mapPlaceholder;
+  if (!ph) return;
+  if (state.image) { ph.classList.add('hidden'); return; }
+  ph.classList.remove('hidden');
+
+  if (flags.restoredAwaitingImage) {
+    const r = state.annotations.regions.length;
+    const p = state.annotations.pins.length;
+    const parts = [];
+    if (r) parts.push(`${r} region${r === 1 ? '' : 's'}`);
+    if (p) parts.push(`${p} pin${p === 1 ? '' : 's'}`);
+    ph.innerHTML = `
+      <div class="placeholder-restore">
+        <p>${parts.join(' and ')} restored from your previous session.<br/>
+           Upload the original image to continue.</p>
+        <button id="discard-saved" class="btn-link">Discard saved annotations</button>
+      </div>
+    `;
+    document.getElementById('discard-saved')?.addEventListener('click', () => {
+      clearSavedAnnotations();
+      updatePlaceholder();
+    });
+  } else {
+    ph.innerHTML = '<p>No map loaded.<br/>Switch to Design Mode and upload an image.</p>';
+  }
+}
 
 // MODE
 
@@ -235,6 +176,7 @@ function setMode(mode) {
     setActiveTool(null);
     cancelRegionDraw();
   }
+  applyLayerVisibility();
   renderDetailPanel();
 }
 
@@ -244,26 +186,44 @@ btnMode.addEventListener('click', () => {
 
 // TOOLS
 
+const TOOL_BTNS = {
+  region: btnRegion,
+  pin:    btnPin,
+  wand:   btnWand,
+  brush:  btnBrush,
+  eraser: btnEraser,
+  edit:   btnEdit,
+};
+
 function setActiveTool(tool) {
   state.ui.activeTool = tool;
-  [btnRegion, btnPin, btnWand].forEach(b => b.classList.remove('active'));
-  if (tool === 'region') btnRegion.classList.add('active');
-  if (tool === 'pin')    btnPin.classList.add('active');
-  if (tool === 'wand')   btnWand.classList.add('active');
-  map.getContainer().style.cursor = tool ? 'crosshair' : '';
+
+  Object.values(TOOL_BTNS).forEach(b => b?.classList.remove('active'));
+  if (tool) TOOL_BTNS[tool]?.classList.add('active');
+
+  wandOptions?.classList.toggle('hidden', tool !== 'wand');
+  brushControls?.classList.toggle('hidden', tool !== 'brush' && tool !== 'eraser');
+
+  const isPaint = tool === 'brush' || tool === 'eraser';
+  if (!isPaint) hideBrushCursor();
+  map.getContainer().style.cursor = isPaint ? 'none' : (tool ? 'crosshair' : '');
+  if (isPaint) map.dragging.disable(); else map.dragging.enable();
+
   if (tool !== 'region') cancelRegionDraw();
   if (tool !== 'wand')   setWandStatus('');
+  if (tool !== 'edit')   exitVertexEdit();
 }
 
-btnRegion.addEventListener('click', () => {
-  setActiveTool(state.ui.activeTool === 'region' ? null : 'region');
-});
-btnPin.addEventListener('click', () => {
-  setActiveTool(state.ui.activeTool === 'pin' ? null : 'pin');
-});
-btnWand.addEventListener('click', () => {
-  setActiveTool(state.ui.activeTool === 'wand' ? null : 'wand');
-});
+function wireToolBtn(btn, name) {
+  btn?.addEventListener('click', () => setActiveTool(state.ui.activeTool === name ? null : name));
+}
+
+wireToolBtn(btnRegion, 'region');
+wireToolBtn(btnPin,    'pin');
+wireToolBtn(btnWand,   'wand');
+wireToolBtn(btnBrush,  'brush');
+wireToolBtn(btnEraser, 'eraser');
+wireToolBtn(btnEdit,   'edit');
 
 // IMG UPLOAD
 
@@ -298,20 +258,23 @@ function applyImage(url, width, height) {
   state.image  = { url, width, height };
   mapPlaceholder.classList.add('hidden');
 
-  if (restoredAwaitingImage) {
-    mountAllAnnotations();
-    restoredAwaitingImage = false;
+  if (flags.restoredAwaitingImage) {
+    state.annotations.pins.forEach(mountPinLayer);
+    state.annotations.regions.forEach(mountRegionLayer);
+    flags.restoredAwaitingImage = false;
   }
 }
 
 // PINS
 
 function addPin(latlng) {
+  pushHistory();
   const pin = {
     id:     generateId(),
     latlng: { lat: latlng.lat, lng: latlng.lng },
     label:  'New Pin',
     body:   '',
+    hidden: false,
   };
   state.annotations.pins.push(pin);
   mountPinLayer(pin);
@@ -383,12 +346,16 @@ function bindSwatchGrid(annotation) {
   const grid        = document.getElementById('swatch-grid');
   const customBtn   = document.getElementById('swatch-custom-btn');
   const customInput = document.getElementById('edit-color-custom');
+  const colorDot    = document.querySelector('.swatch-summary .color-dot');
+  const syncDot     = (c) => { if (colorDot) colorDot.style.background = c; };
 
   grid.addEventListener('click', (e) => {
     const swatch = e.target.closest('[data-color]');
     if (!swatch) return;
+    pushHistory();
     annotation.color = swatch.dataset.color;
     customInput.value = annotation.color;
+    syncDot(annotation.color);
     grid.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
     swatch.classList.add('active');
     customBtn.classList.remove('active');
@@ -398,8 +365,10 @@ function bindSwatchGrid(annotation) {
 
   customBtn.addEventListener('click', () => customInput.click());
 
+  customInput.addEventListener('focus', () => { pushHistory(); });
   customInput.addEventListener('input', (e) => {
     annotation.color = e.target.value;
+    syncDot(annotation.color);
     grid.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
     customBtn.classList.add('active');
     updateRegionLayer(annotation);
@@ -431,13 +400,14 @@ function startRegionDraw(latlng) {
 
 function commitRegion() {
   if (draw.points.length < 3) { cancelRegionDraw(); return; }
-
+  pushHistory();
   const region = {
     id:       generateId(),
     polygons: [draw.points.map(p => ({ lat: p.lat, lng: p.lng }))],
     color:    nextColor(),
     label:    'New Region',
     body:     '',
+    hidden:   false,
   };
   state.annotations.regions.push(region);
   cancelRegionDraw();
@@ -475,6 +445,7 @@ function mountRegionLayer(region) {
       return;
     }
     selectAnnotation('region', region.id);
+    if (state.ui.activeTool === 'edit') enterVertexEdit(region.id);
   });
 
   group.on('mouseover', () => {
@@ -503,7 +474,46 @@ function updateRegionLayer(region) {
   });
 }
 
+function remountRegionLayer(region) {
+  layers.regions[region.id]?.remove();
+  delete layers.regions[region.id];
+  mountRegionLayer(region);
+}
+
+function applyLayerVisibility() {
+  const hide = state.mode === 'display';
+  state.annotations.pins.forEach(pin => {
+    const m = layers.pins[pin.id];
+    if (!m) return;
+    if (hide && pin.hidden) m.remove(); else m.addTo(map);
+  });
+  state.annotations.regions.forEach(region => {
+    const g = layers.regions[region.id];
+    if (!g) return;
+    if (hide && region.hidden) g.remove(); else g.addTo(map);
+  });
+}
+
 // MERGE
+
+// bridges between every cross-pair; empty = non-adjacent (kept as separate rings)
+function buildBridges(polysA, polysB) {
+  const bridges = [];
+  for (const a of polysA) {
+    for (const b of polysB) {
+      try {
+        const br = polygonClipping.intersection(
+          ringToGeom(inflatePolygon(a, MERGE_BUFFER_PX)),
+          ringToGeom(inflatePolygon(b, MERGE_BUFFER_PX)),
+        );
+        bridges.push(...br);
+      } catch (err) {
+        console.warn('bridge failed for pair, skipping:', err);
+      }
+    }
+  }
+  return bridges;
+}
 
 function startMerge(regionId) {
   state.ui.mergeSource = regionId;
@@ -516,16 +526,11 @@ function cancelMerge() {
   renderDetailPanel();
 }
 
-// bridge dist (px); max bridgeable gap = 2×
-const MERGE_BUFFER_PX = 4;
-
-// ring [{lat,lng}] → pc Polygon [[[x,y]]]
-const ringToGeom = (ring) => [ring.map(p => [p.lng, p.lat])];
-
 function performMerge(targetId, sourceId) {
   const target = state.annotations.regions.find(r => r.id === targetId);
   const source = state.annotations.regions.find(r => r.id === sourceId);
   if (!target || !source) { cancelMerge(); return; }
+  pushHistory();
 
   if (typeof polygonClipping === 'undefined') {
     setWandStatus('Merge unavailable: polygon library failed to load.');
@@ -533,21 +538,7 @@ function performMerge(targetId, sourceId) {
     return;
   }
 
-  // bridges between every cross-region pair; empty = non-adjacent (kept as separate rings)
-  const bridges = [];
-  for (const tp of target.polygons) {
-    for (const sp of source.polygons) {
-      try {
-        const br = polygonClipping.intersection(
-          ringToGeom(inflatePolygon(tp, MERGE_BUFFER_PX)),
-          ringToGeom(inflatePolygon(sp, MERGE_BUFFER_PX)),
-        );
-        bridges.push(...br); // each element is a Polygon ([[ring,...]])
-      } catch (err) {
-        console.warn('bridge failed for pair, skipping:', err);
-      }
-    }
-  }
+  const bridges = buildBridges(target.polygons, source.polygons);
 
   let merged;
   try {
@@ -574,7 +565,8 @@ function performMerge(targetId, sourceId) {
   delete layers.regions[targetId];
   mountRegionLayer(target);
 
-  state.ui.mergeSource = null;
+  state.ui.mergeSource = targetId;
+  state.ui.mergeHover  = null;
   selectAnnotation('region', targetId);
   scheduleSave();
 }
@@ -583,26 +575,17 @@ function performMerge(targetId, sourceId) {
 function consolidateRegion(regionId) {
   const region = state.annotations.regions.find(r => r.id === regionId);
   if (!region || region.polygons.length < 2) return;
+  pushHistory();
 
   if (typeof polygonClipping === 'undefined') {
     setWandStatus('Consolidate unavailable: polygon library failed to load.');
     return;
   }
 
+  const polys   = region.polygons;
   const bridges = [];
-  const polys = region.polygons;
   for (let i = 0; i < polys.length; i++) {
-    for (let j = i + 1; j < polys.length; j++) {
-      try {
-        const br = polygonClipping.intersection(
-          ringToGeom(inflatePolygon(polys[i], MERGE_BUFFER_PX)),
-          ringToGeom(inflatePolygon(polys[j], MERGE_BUFFER_PX)),
-        );
-        bridges.push(...br);
-      } catch (err) {
-        console.warn('bridge failed for pair, skipping:', err);
-      }
-    }
+    bridges.push(...buildBridges([polys[i]], polys.slice(i + 1)));
   }
 
   let result;
@@ -620,56 +603,6 @@ function consolidateRegion(regionId) {
   mountRegionLayer(region);
   selectAnnotation('region', regionId);
   scheduleSave();
-}
-
-function ringArea(ring) {
-  let a = 0;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    a += (ring[j][0] + ring[i][0]) * (ring[j][1] - ring[i][1]);
-  }
-  return Math.abs(a / 2);
-}
-
-function inflatePolygon(points, distance) {
-  const n = points.length;
-  if (n < 3) return points.slice();
-
-  let signed = 0;
-  for (let i = 0; i < n; ++i) {
-    const a = points[i], b = points[(i + 1) % n];
-    signed += a.lng * b.lat - b.lng * a.lat;
-  }
-  const orient = signed > 0 ? 1 : -1;
-
-  const result = new Array(n);
-  for (let i = 0; i < n; ++i) {
-    const prev = points[(i - 1 + n) % n];
-    const curr = points[i];
-    const next = points[(i + 1) % n];
-
-    const e1x = curr.lng - prev.lng, e1y = curr.lat - prev.lat;
-    const e2x = next.lng - curr.lng, e2y = next.lat - curr.lat;
-    const e1Len = Math.hypot(e1x, e1y);
-    const e2Len = Math.hypot(e2x, e2y);
-    if (e1Len < 1e-9 || e2Len < 1e-9) { result[i] = { ...curr }; continue; }
-
-    const n1x = orient * e1y / e1Len, n1y = -orient * e1x / e1Len;
-    const n2x = orient * e2y / e2Len, n2y = -orient * e2x / e2Len;
-
-    let bx = n1x + n2x, by = n1y + n2y;
-    const bLen = Math.hypot(bx, by);
-
-    if (bLen < 1e-9) {
-      result[i] = { lng: curr.lng + n1x * distance, lat: curr.lat + n1y * distance };
-      continue;
-    }
-    bx /= bLen; by /= bLen;
-
-    const cosHalf = n1x * bx + n1y * by;
-    const factor  = cosHalf > 0.05 ? distance / cosHalf : distance * 20;
-    result[i] = { lng: curr.lng + bx * factor, lat: curr.lat + by * factor };
-  }
-  return result;
 }
 
 // FLOOD REGION
@@ -734,12 +667,14 @@ function onWandResult({ points, simpCount, filled }) {
     lng:   p.x + wandOffset.x,
   }));
 
+  pushHistory();
   const region = {
     id:       generateId(),
     polygons: [latlngs],
     color:    nextColor(),
     label:    'New Region',
     body:     '',
+    hidden:   false,
   };
   state.annotations.regions.push(region);
   mountRegionLayer(region);
@@ -750,6 +685,7 @@ function onWandResult({ points, simpCount, filled }) {
 // DELETION
 
 function deleteAnnotation(type, id) {
+  pushHistory();
   if (type === 'pin') {
     state.annotations.pins = state.annotations.pins.filter(p => p.id !== id);
     layers.pins[id]?.remove();
@@ -763,19 +699,61 @@ function deleteAnnotation(type, id) {
   scheduleSave();
 }
 
+// HISTORY
+
+function pushHistory() {
+  const snap = JSON.stringify(state.annotations);
+  if (historyStack.length && historyStack[historyStack.length - 1] === snap) return;
+  historyStack.push(snap);
+  if (historyStack.length > HISTORY_MAX) historyStack.shift();
+}
+
+function undo() {
+  exitVertexEdit();
+  if (!historyStack.length) return;
+  const snap = JSON.parse(historyStack.pop());
+  Object.values(layers.pins).forEach(m => m.remove());
+  Object.values(layers.regions).forEach(g => g.remove());
+  layers.pins    = {};
+  layers.regions = {};
+  state.annotations = snap;
+  state.annotations.pins.forEach(mountPinLayer);
+  state.annotations.regions.forEach(mountRegionLayer);
+  applyLayerVisibility();
+  clearSelection();
+  scheduleSave();
+}
+
 // SELECTION/DETAILS
 
 function selectAnnotation(type, id) {
+  navStack.length = 0;
   state.ui.selected = { type, id };
   detailPanel.classList.remove('hidden');
   renderDetailPanel();
 }
 
+function navigateAnnotation(type, id) {
+  if (state.ui.selected) navStack.push({ ...state.ui.selected });
+  state.ui.selected = { type, id };
+  detailPanel.classList.remove('hidden');
+  renderDetailPanel();
+}
+
+function goBack() {
+  if (!navStack.length) return;
+  state.ui.selected = navStack.pop();
+  renderDetailPanel();
+}
+
 function clearSelection() {
+  navStack.length = 0;
   state.ui.selected = null;
   detailPanel.classList.add('hidden');
   renderDetailPanel();
 }
+
+// DETAIL PANEL
 
 function renderDetailPanel() {
   const sel = state.ui.selected;
@@ -784,10 +762,11 @@ function renderDetailPanel() {
       && state.ui.mergeSource !== state.ui.mergeHover) {
     const source = state.annotations.regions.find(r => r.id === state.ui.mergeSource);
     const target = state.annotations.regions.find(r => r.id === state.ui.mergeHover);
-    if (source && target) { renderMergePreview(source, target); return; }
+    if (source && target) { renderDetailTree(null); renderMergePreview(source, target); return; }
   }
 
   if (!sel) {
+    renderDetailTree(null);
     detailContent.innerHTML = '<p class="detail-empty">Click a region or pin to see details.</p>';
     return;
   }
@@ -795,6 +774,8 @@ function renderDetailPanel() {
   const list = sel.type === 'region' ? state.annotations.regions : state.annotations.pins;
   const annotation = list.find(a => a.id === sel.id);
   if (!annotation) { clearSelection(); return; }
+
+  renderDetailTree(sel.type === 'region' ? annotation : null);
 
   if (state.mode === 'design') {
     renderDetailEditor(annotation, sel.type);
@@ -804,6 +785,9 @@ function renderDetailPanel() {
 }
 
 function renderMergePreview(source, target) {
+  const bodyHtml = target.body
+    ? (typeof marked !== 'undefined' ? marked.parse(target.body) : escapeHtml(target.body))
+    : '<em style="color:#888">No description.</em>';
   detailContent.innerHTML = `
     <div class="merge-banner">
       Click to merge into
@@ -814,23 +798,46 @@ function renderMergePreview(source, target) {
       <span class="color-wheel" style="background:${target.color || '#4a9eff'}"></span>
       ${escapeHtml(target.label || 'Untitled')}
     </h2>
-    <div class="detail-body">${target.body || '<em style="color:#888">No description.</em>'}</div>
+    <div class="detail-body markdown-body">${bodyHtml}</div>
   `;
 }
 
+function backButtonHtml() {
+  if (!navStack.length) return '';
+  const prev = navStack[navStack.length - 1];
+  const list = prev.type === 'region' ? state.annotations.regions : state.annotations.pins;
+  const label = list.find(a => a.id === prev.id)?.label || 'Untitled';
+  return `<button id="nav-back" class="btn-back">← ${escapeHtml(label)}</button>`;
+}
+
+function bindBackButton() {
+  document.getElementById('nav-back')?.addEventListener('click', goBack);
+}
+
 function renderDetailView(annotation) {
+  const bodyHtml = annotation.body
+    ? (typeof marked !== 'undefined' ? marked.parse(annotation.body) : escapeHtml(annotation.body))
+    : '<em style="color:#888">No description.</em>';
   detailContent.innerHTML = `
-    <h2>${escapeHtml(annotation.label || 'Untitled')}</h2>
-    <div class="detail-body">${annotation.body || '<em style="color:#888">No description.</em>'}</div>
+    ${backButtonHtml()}
+    <h2 class="detail-title">${escapeHtml(annotation.label || 'Untitled')}</h2>
+    <hr class="detail-divider" />
+    <div class="detail-body markdown-body">${bodyHtml}</div>
   `;
+  bindBackButton();
 }
 
 function renderDetailEditor(annotation, type) {
   const isRegion = type === 'region';
 
-  const colorSwatch = isRegion
-    ? `<label class="field-label">Color</label>${renderSwatchGrid(annotation.color)}`
-    : '';
+  const colorSwatch = isRegion ? `
+    <details class="swatch-details">
+      <summary class="swatch-summary">
+        <span class="field-label" style="display:inline">Color</span>
+        <span class="color-dot" style="background:${annotation.color || '#4a9eff'}"></span>
+      </summary>
+      ${renderSwatchGrid(annotation.color)}
+    </details>` : '';
 
   const mergeBanner = (isRegion && state.ui.mergeSource === annotation.id)
     ? `<div class="merge-banner">
@@ -851,6 +858,7 @@ function renderDetailEditor(annotation, type) {
   ` : `<button id="edit-delete" class="btn-danger">Delete</button>`;
 
   detailContent.innerHTML = `
+    ${backButtonHtml()}
     <div class="detail-editor">
       ${mergeBanner}
 
@@ -861,17 +869,24 @@ function renderDetailEditor(annotation, type) {
       ${colorSwatch}
       ${polyHint}
 
-      <label class="field-label" for="edit-body">Description <span class="field-hint">(HTML ok)</span></label>
+      <label class="field-label" for="edit-body">Description <span class="field-hint">(Markdown)</span></label>
       <textarea id="edit-body" class="field-textarea"
                 placeholder="Description…">${escapeHtml(annotation.body || '')}</textarea>
+
+      <label class="field-toggle" for="edit-hidden">
+        <input id="edit-hidden" type="checkbox" ${annotation.hidden ? 'checked' : ''} />
+        Hide in display mode
+      </label>
 
       <div class="editor-actions">${actionBtns}</div>
     </div>
   `;
 
-  const labelInput = document.getElementById('edit-label');
-  const bodyInput  = document.getElementById('edit-body');
+  const labelInput  = document.getElementById('edit-label');
+  const bodyInput   = document.getElementById('edit-body');
+  const hiddenCheck = document.getElementById('edit-hidden');
 
+  labelInput.addEventListener('focus', pushHistory);
   labelInput.addEventListener('input', () => {
     annotation.label = labelInput.value;
     if (type === 'pin')    updatePinLayer(annotation);
@@ -879,8 +894,16 @@ function renderDetailEditor(annotation, type) {
     scheduleSave();
   });
 
+  bodyInput.addEventListener('focus', pushHistory);
   bodyInput.addEventListener('input', () => {
     annotation.body = bodyInput.value;
+    scheduleSave();
+  });
+
+  hiddenCheck.addEventListener('change', () => {
+    pushHistory();
+    annotation.hidden = hiddenCheck.checked;
+    applyLayerVisibility();
     scheduleSave();
   });
 
@@ -900,8 +923,44 @@ function renderDetailEditor(annotation, type) {
     consolidateRegion(annotation.id);
   });
 
+  bindBackButton();
   labelInput.focus();
   labelInput.select();
+}
+
+function renderTreeHtml(region) {
+  const allPins = pinsInRegion(region);
+  const pins = state.mode === 'display' ? allPins.filter(p => !p.hidden) : allPins;
+  if (!pins.length) return '';
+  const items = pins.map(p => `
+    <div class="pin-list-item" data-pin-id="${p.id}">
+      ${escapeHtml(p.label || 'Untitled pin')}
+    </div>`).join('');
+  return `
+    <details class="pin-list" open>
+      <summary class="pin-list-summary">Pins (${pins.length})</summary>
+      ${items}
+    </details>`;
+}
+
+function renderDetailTree(region) {
+  if (!detailTree) return;
+  const html = region ? renderTreeHtml(region) : '';
+  if (html) {
+    detailTree.innerHTML = html;
+    detailTree.classList.remove('hidden');
+    detailTree.querySelectorAll('[data-pin-id]').forEach(el => {
+      el.addEventListener('click', () => {
+        const pin = state.annotations.pins.find(p => p.id === el.dataset.pinId);
+        if (!pin) return;
+        navigateAnnotation('pin', pin.id);
+        map.panTo(pin.latlng);
+      });
+    });
+  } else {
+    detailTree.innerHTML = '';
+    detailTree.classList.add('hidden');
+  }
 }
 
 // MAP CLICKING
@@ -911,6 +970,7 @@ map.on('click', (e) => {
   if      (state.ui.activeTool === 'pin')    addPin(e.latlng);
   else if (state.ui.activeTool === 'region') startRegionDraw(e.latlng);
   else if (state.ui.activeTool === 'wand')   triggerWand(e.latlng);
+  else if (state.ui.mergeSource)             cancelMerge();
   else                                        clearSelection();
 });
 
@@ -923,24 +983,263 @@ map.on('dblclick', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+    e.preventDefault();
+    undo();
+    return;
+  }
   if (e.key !== 'Escape') return;
-  if (draw.active)           cancelRegionDraw();
-  if (state.ui.mergeSource)  cancelMerge();
+  if (draw.active)            cancelRegionDraw();
+  if (state.ui.mergeSource)   cancelMerge();
+  if (vertexEdit.active)      exitVertexEdit();
+  if (state.ui.activeTool === 'edit') setActiveTool(null);
 });
 
-// UTILS
+// VERTEX EDIT
 
-function generateId() {
-  return Math.random().toString(36).slice(2, 9);
+function refreshRegionGeometry(region) {
+  const group = layers.regions[region.id];
+  if (!group) return;
+  const polys = [];
+  group.eachLayer(l => polys.push(l));
+  region.polygons.forEach((ring, i) => {
+    if (polys[i]) polys[i].setLatLngs(ring.map(p => [p.lat, p.lng]));
+  });
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+function updateMidpointPositions(region) {
+  let mIdx = 0;
+  region.polygons.forEach((ring) => {
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i];
+      const b = ring[(i + 1) % ring.length];
+      const mid = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+      if (vertexEdit.midHandles[mIdx]) {
+        vertexEdit.midHandles[mIdx].setLatLng([mid.lat, mid.lng]);
+      }
+      mIdx++;
+    }
+  });
 }
+
+function enterVertexEdit(regionId) {
+  exitVertexEdit();
+  const region = state.annotations.regions.find(r => r.id === regionId);
+  if (!region) return;
+  vertexEdit.active   = true;
+  vertexEdit.regionId = regionId;
+
+  region.polygons.forEach((ring, ringIdx) => {
+    ring.forEach((pt, ptIdx) => {
+      const handle = L.marker([pt.lat, pt.lng], {
+        draggable: true,
+        icon: L.divIcon({ className: 'vertex-handle', iconSize: [10, 10], iconAnchor: [5, 5] }),
+        zIndexOffset: 1000,
+      }).addTo(map);
+
+      handle.on('dragstart', () => { pushHistory(); });
+      handle.on('drag', (e) => {
+        const ll = e.target.getLatLng();
+        region.polygons[ringIdx][ptIdx] = { lat: ll.lat, lng: ll.lng };
+        refreshRegionGeometry(region);
+        updateMidpointPositions(region);
+      });
+      handle.on('dragend', () => { scheduleSave(); });
+      handle.on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
+        if (ring.length <= 3) return;
+        pushHistory();
+        region.polygons[ringIdx].splice(ptIdx, 1);
+        remountRegionLayer(region);
+        enterVertexEdit(regionId);
+        scheduleSave();
+      });
+
+      vertexEdit.handles.push(handle);
+    });
+
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i];
+      const b = ring[(i + 1) % ring.length];
+      const mid = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+      const insertIdx = i + 1;
+
+      const mHandle = L.marker([mid.lat, mid.lng], {
+        draggable: false,
+        icon: L.divIcon({ className: 'midpoint-handle', iconSize: [8, 8], iconAnchor: [4, 4] }),
+        zIndexOffset: 900,
+      }).addTo(map);
+
+      mHandle.on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
+        pushHistory();
+        region.polygons[ringIdx].splice(insertIdx, 0, { lat: mid.lat, lng: mid.lng });
+        remountRegionLayer(region);
+        enterVertexEdit(regionId);
+        scheduleSave();
+      });
+
+      vertexEdit.midHandles.push(mHandle);
+    }
+  });
+}
+
+function exitVertexEdit() {
+  vertexEdit.handles.forEach(h => h.remove());
+  vertexEdit.midHandles.forEach(h => h.remove());
+  vertexEdit.handles    = [];
+  vertexEdit.midHandles = [];
+  vertexEdit.active     = false;
+  vertexEdit.regionId   = null;
+}
+
+// BRUSH / ERASER
+
+function screenToBrushRadius() {
+  const center = map.getSize().divideBy(2);
+  const a = map.containerPointToLatLng(center);
+  const b = map.containerPointToLatLng(center.add([brushSizePx, 0]));
+  return Math.abs(b.lng - a.lng);
+}
+
+function updateBrushCursor(latlng) {
+  const r   = screenToBrushRadius();
+  const pts = circlePoly(latlng, r);
+  if (brushCursorLayer) {
+    brushCursorLayer.setLatLngs(pts.map(p => [p.lat, p.lng]));
+  } else {
+    brushCursorLayer = L.polygon(pts.map(p => [p.lat, p.lng]), {
+      color:       '#fff',
+      weight:      1.5,
+      dashArray:   '5 4',
+      fill:        false,
+      interactive: false,
+    }).addTo(map);
+  }
+}
+
+function hideBrushCursor() {
+  if (brushCursorLayer) { brushCursorLayer.remove(); brushCursorLayer = null; }
+}
+
+function applyBrush(latlng) {
+  if (typeof polygonClipping === 'undefined') return;
+
+  const r          = screenToBrushRadius();
+  const circlePts  = circlePoly(latlng, r);
+  const circleGeom = [circlePts.map(p => [p.lng, p.lat])];
+
+  let region = null;
+  let isNew  = false;
+  if (state.ui.selected?.type === 'region') {
+    region = state.annotations.regions.find(r2 => r2.id === state.ui.selected.id);
+  }
+  if (!region) {
+    region = {
+      id:       generateId(),
+      polygons: [],
+      color:    nextColor(),
+      label:    'New Region',
+      body:     '',
+      hidden:   false,
+    };
+    state.annotations.regions.push(region);
+    isNew = true;
+  }
+
+  let result;
+  try {
+    if (region.polygons.length === 0) {
+      result = polygonClipping.union(circleGeom);
+    } else {
+      result = polygonClipping.union(...region.polygons.map(ringToGeom), circleGeom);
+    }
+  } catch (err) {
+    console.warn('brush union failed:', err);
+    return;
+  }
+  if (!result?.length) return;
+
+  region.polygons = result.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
+  remountRegionLayer(region);
+  if (isNew) selectAnnotation('region', region.id);
+  scheduleSave();
+}
+
+function applyEraser(latlng) {
+  if (typeof polygonClipping === 'undefined') return;
+
+  const r          = screenToBrushRadius();
+  const circlePts  = circlePoly(latlng, r);
+  const circleGeom = [circlePts.map(p => [p.lng, p.lat])];
+
+  state.annotations.regions.forEach(region => {
+    if (!region.polygons.length) return;
+
+    const group = layers.regions[region.id];
+    if (group) {
+      try {
+        const bounds = group.getBounds();
+        if (!bounds.isValid()) return;
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
+        const closestLat = Math.max(sw.lat, Math.min(ne.lat, latlng.lat));
+        const closestLng = Math.max(sw.lng, Math.min(ne.lng, latlng.lng));
+        if (latlngDist(latlng, { lat: closestLat, lng: closestLng }) > r) return;
+      } catch (_) { /* getBounds can throw if group empty */ }
+    }
+
+    let result;
+    try {
+      result = polygonClipping.difference(region.polygons.map(ringToGeom), circleGeom);
+    } catch (err) {
+      console.warn('eraser difference failed:', err);
+      return;
+    }
+
+    if (!result?.length) {
+      state.annotations.regions = state.annotations.regions.filter(r2 => r2.id !== region.id);
+      layers.regions[region.id]?.remove();
+      delete layers.regions[region.id];
+      if (state.ui.selected?.id === region.id) clearSelection();
+      scheduleSave();
+      return;
+    }
+
+    region.polygons = result.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
+    remountRegionLayer(region);
+    scheduleSave();
+  });
+}
+
+map.on('mousedown', (e) => {
+  if (state.mode !== 'design') return;
+  const tool = state.ui.activeTool;
+  if (tool !== 'brush' && tool !== 'eraser') return;
+  brushPainting   = true;
+  brushLastLatLng = e.latlng;
+  pushHistory();
+  if (tool === 'brush')  applyBrush(e.latlng);
+  if (tool === 'eraser') applyEraser(e.latlng);
+});
+
+map.on('mousemove', (e) => {
+  const tool = state.ui.activeTool;
+  if (tool === 'brush' || tool === 'eraser') updateBrushCursor(e.latlng);
+
+  if (!brushPainting) return;
+  if (state.mode !== 'design') return;
+
+  const r = screenToBrushRadius();
+  if (latlngDist(e.latlng, brushLastLatLng) < r * 0.5) return;
+  brushLastLatLng = e.latlng;
+
+  if (tool === 'brush')  applyBrush(e.latlng);
+  if (tool === 'eraser') applyEraser(e.latlng);
+});
+
+map.on('mouseup',  () => { brushPainting = false; brushLastLatLng = null; });
+map.on('mouseout', () => { brushPainting = false; brushLastLatLng = null; });
 
 // INIT
 
@@ -948,7 +1247,8 @@ initWorker();
 const hadStored = loadAnnotations();
 if (hadStored) {
   colorIndex = state.annotations.regions.length;
-  restoredAwaitingImage = true;
+  flags.restoredAwaitingImage = true;
   updatePlaceholder();
 }
 setMode('display');
+if (typeof lucide !== 'undefined') lucide.createIcons();

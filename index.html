@@ -7,6 +7,8 @@
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/marked@14.1.3/marked.min.js"></script>
 </head>
 <body>
 
@@ -16,29 +18,48 @@
 
     <div class="tool-group">
       <button id="tool-upload" class="tool-btn" title="Upload map image">
-        Upload Image
+        <i data-lucide="upload"></i> Upload Image
       </button>
-      <!-- Invisible file input triggered by the button above -->
       <input type="file" id="upload-input" accept="image/jpeg,image/png" hidden />
     </div>
 
     <div class="tool-group">
-      <button id="tool-region" class="tool-btn" title="Draw a region polygon">
-        Add Region
-      </button>
       <button id="tool-pin" class="tool-btn" title="Place a pin">
-        Add Pin
-      </button>
-      <button id="tool-wand" class="tool-btn" title="Flood-fill a region from a click">
-        Flood Region
+        <i data-lucide="map-pin"></i> Add Pin
       </button>
     </div>
 
-    <div class="tool-group" id="wand-options">
+    <div class="tool-group">
+      <button id="tool-region" class="tool-btn" title="Draw a region polygon">
+        <i data-lucide="box-select"></i> Add Region
+      </button>
+      <button id="tool-wand" class="tool-btn" title="Flood-fill a region from a click">
+        <i data-lucide="wand-2"></i> Flood Region
+      </button>
+      <button id="tool-edit" class="tool-btn" title="Edit vertices of selected region">
+        <i data-lucide="pen-tool"></i> Edit Vertices
+      </button>
+    </div>
+
+    <div class="tool-group">
+      <button id="tool-brush" class="tool-btn" title="Paint brush — drag to add to selected region">
+        <i data-lucide="paintbrush"></i> Brush
+      </button>
+      <button id="tool-eraser" class="tool-btn" title="Eraser — drag to subtract from regions">
+        <i data-lucide="eraser"></i> Eraser
+      </button>
+    </div>
+
+    <div class="tool-group hidden" id="wand-options">
       <label class="field-label">Tolerance <span id="wand-tolerance-val">30</span></label>
       <input id="wand-tolerance" type="range" min="1" max="120" value="30" class="field-range" />
       <div id="wand-status" class="wand-status"></div>
       <button id="wand-cancel" class="btn-danger hidden">Cancel</button>
+    </div>
+
+    <div class="tool-group hidden" id="brush-controls">
+      <label class="field-label">Brush size <span id="brush-size-val">30</span>px</label>
+      <input id="brush-size" type="range" min="5" max="150" value="30" class="field-range" />
     </div>
 
     <!-- Future tool groups (filtering, etc.) will slot in here -->
@@ -62,6 +83,7 @@
   <!-- Right panel: annotation details -->
   <aside id="detail-panel" class="panel panel-right hidden">
     <div class="panel-header">Details</div>
+    <div id="detail-tree" class="hidden"></div>
     <div id="detail-content">
       <p class="detail-empty">Click a region or pin to see details.</p>
     </div>
@@ -69,6 +91,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/polygon-clipping@0.15.7/dist/polygon-clipping.umd.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

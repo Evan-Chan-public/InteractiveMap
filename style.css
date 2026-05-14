@@ -6,7 +6,7 @@
 
 :root {
   --panel-width: 220px;
-  --detail-width: 280px;
+  --detail-width: 420px;
   --header-height: 0px;
   --bg: #1a1a1a;
   --panel-bg: #242424;
@@ -92,6 +92,16 @@ body {
   cursor: pointer;
   transition: background 0.15s;
   font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tool-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .tool-btn:hover {
@@ -171,6 +181,13 @@ body {
 
 /* DETAIL PANEL */
 
+#detail-tree {
+  max-height: 160px;
+  overflow-y: auto;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+
 #detail-content {
   flex: 1;
   overflow-y: auto;
@@ -197,6 +214,66 @@ body {
 #detail-content a {
   color: var(--accent);
 }
+
+/* MARKDOWN BODY */
+
+.detail-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.detail-divider {
+  border: none;
+  border-top: 1px solid var(--panel-border);
+  margin: 0 0 12px;
+}
+
+.markdown-body { line-height: 1.65; }
+.markdown-body img { max-width: 100%; border-radius: 4px; margin: 4px 0; }
+.markdown-body h1, .markdown-body h2, .markdown-body h3,
+.markdown-body h4, .markdown-body h5, .markdown-body h6 {
+  font-weight: 600;
+  margin: 12px 0 4px;
+  color: var(--text);
+}
+.markdown-body h1 { font-size: 15px; }
+.markdown-body h2 { font-size: 14px; }
+.markdown-body h3, .markdown-body h4,
+.markdown-body h5, .markdown-body h6 { font-size: 13px; }
+.markdown-body p  { margin: 0 0 8px; }
+.markdown-body ul, .markdown-body ol { padding-left: 18px; margin: 0 0 8px; }
+.markdown-body li { margin: 2px 0; }
+.markdown-body blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 0 0 8px;
+  padding: 4px 10px;
+  color: var(--text-muted);
+}
+.markdown-body code {
+  background: #111;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 12px;
+  font-family: monospace;
+}
+.markdown-body pre {
+  background: #111;
+  border-radius: 4px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  margin: 0 0 8px;
+}
+.markdown-body pre code { background: none; padding: 0; }
+.markdown-body a  { color: var(--accent); }
+.markdown-body hr { border: none; border-top: 1px solid var(--panel-border); margin: 10px 0; }
+.markdown-body table { border-collapse: collapse; width: 100%; margin: 0 0 8px; font-size: 12px; }
+.markdown-body th, .markdown-body td {
+  border: 1px solid var(--panel-border);
+  padding: 4px 8px;
+  text-align: left;
+}
+.markdown-body th { background: var(--btn-bg); }
 
 /* DETAIL EDITOR */
 
@@ -243,7 +320,7 @@ body {
 
 .field-textarea {
   resize: vertical;
-  min-height: 120px;
+  min-height: 220px;
   line-height: 1.5;
 }
 
@@ -269,11 +346,41 @@ body {
   color: #fff;
 }
 
+.swatch-details {
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.swatch-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.swatch-summary::-webkit-details-marker { display: none; }
+
+.swatch-summary:hover { background: var(--btn-hover); }
+
+.color-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+
 .swatch-grid {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 3px;
-  padding: 4px 0 2px;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+  padding: 6px;
+  border-top: 1px solid var(--panel-border);
 }
 
 .swatch {
@@ -376,6 +483,19 @@ body {
   margin-bottom: 8px;
 }
 
+.btn-back {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 0 10px;
+  display: block;
+  transition: color 0.15s;
+}
+
+.btn-back:hover { color: var(--text); }
+
 .btn-link {
   background: none;
   border: none;
@@ -384,4 +504,107 @@ body {
   cursor: pointer;
   padding: 0;
   text-decoration: underline;
+}
+
+/* VISIBILITY TOGGLE */
+
+.field-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.field-toggle input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* PIN LIST TOGGLE */
+
+.pin-list {
+  border-bottom: 1px solid var(--panel-border);
+  overflow: hidden;
+}
+
+.pin-list-summary {
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pin-list-summary::-webkit-details-marker { display: none; }
+
+.pin-list-summary::before {
+  content: '▶';
+  font-size: 8px;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.pin-list[open] .pin-list-summary::before {
+  transform: rotate(90deg);
+}
+
+.pin-list-summary:hover {
+  background: var(--btn-hover);
+  color: var(--text);
+}
+
+.pin-list-item {
+  padding: 6px 10px 6px 24px;
+  font-size: 13px;
+  cursor: pointer;
+  border-top: 1px solid var(--panel-border);
+  transition: background 0.1s;
+}
+
+.pin-list-item:hover {
+  background: var(--btn-hover);
+  color: var(--accent);
+}
+
+/* BRUSH CONTROLS (hidden until brush/eraser active — toggled via .hidden class) */
+
+/* VERTEX EDIT HANDLES */
+
+/* strip Leaflet's default white box from div icons */
+.leaflet-div-icon {
+  background: none !important;
+  border: none !important;
+}
+
+.vertex-handle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #4a9eff;
+  border: 2px solid #fff;
+  box-sizing: border-box;
+  cursor: move;
+}
+
+.midpoint-handle {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(74, 158, 255, 0.45);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  box-sizing: border-box;
+  cursor: pointer;
 }
