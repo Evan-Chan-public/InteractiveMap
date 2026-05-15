@@ -1,6 +1,4 @@
-// Web Worker — hosts the WASM processor.
-// Receives pixel data from the main thread, runs flood fill + contour trace +
-// RDP simplification, returns simplified polygon points.
+// WASM worker — flood fill → contour trace → RDP simplify → polygon points
 
 importScripts('./processor.js');
 
@@ -22,54 +20,38 @@ function handleProcess({ pixels, width, height, seedX, seedY, tolerance, scale }
   const pixelBytes = width * height * 4;
   const maskBytes  = width * height;
 
-  // ── Allocate on WASM heap ─────────────────────────────────────────────────
+  // ALLOC
   const pixPtr  = Module._wasmAlloc(pixelBytes);
   const maskPtr = Module._wasmAlloc(maskBytes);
-
   Module.HEAPU8.set(new Uint8Array(pixels), pixPtr);
-  // Zero the mask (wasmAlloc doesn't guarantee zeroed memory)
-  Module.HEAPU8.fill(0, maskPtr, maskPtr + maskBytes);
+  Module.HEAPU8.fill(0, maskPtr, maskPtr + maskBytes); // wasmAlloc doesn't zero memory
 
-  // ── Pass 1: flood fill ────────────────────────────────────────────────────
+  // FILL
   const filled = Module._floodFill(pixPtr, width, height, seedX, seedY, tolerance, maskPtr);
   postMessage({ type: 'progress', stage: 'fill' });
+  if (filled === 0) { cleanup([pixPtr, maskPtr]); postMessage({ type: 'empty' }); return; }
 
-  if (filled === 0) {
-    cleanup([pixPtr, maskPtr]);
-    postMessage({ type: 'empty' });
-    return;
-  }
-
-  // ── Pass 2: contour trace ─────────────────────────────────────────────────
-  // Upper bound: full perimeter can visit at most width*height pixels.
+  // TRACE
   const maxPairs = width * height;
   const tracePtr = Module._wasmAlloc(maxPairs * 2 * 4); // float32 pairs
-
   const rawCount = Module._traceBoundary(maskPtr, width, height, tracePtr, maxPairs);
   postMessage({ type: 'progress', stage: 'trace', filled });
 
-  // ── Pass 3: RDP simplification ────────────────────────────────────────────
+  // SIMPLIFY
   const simpPtr = Module._wasmAlloc(rawCount * 2 * 4);
   postMessage({ type: 'progress', stage: 'simplify', filled, rawCount });
-  // Epsilon must stay below 1/√2 ≈ 0.707 to preserve right-angle corners.
-  // 0.5 removes only collinear/near-collinear points while keeping all turns.
-  const epsilon = 0.5;
+  const epsilon = 0.5; // must stay below 1/√2 ≈ 0.707 to preserve right-angle corners
   const simpCount = Module._simplifyRDP(tracePtr, rawCount, simpPtr, epsilon);
 
-  // ── Read back and scale to native pixel coords ────────────────────────────
-  // Points are in 1/8-scale canvas coords; multiply by `scale` to get native.
+  // READ BACK
   const rawF32 = new Float32Array(Module.HEAPU8.buffer, simpPtr, simpCount * 2);
   const points = [];
   for (let i = 0; i < simpCount; i++) {
-    points.push({
-      x: rawF32[i * 2]     * scale,
-      y: rawF32[i * 2 + 1] * scale,
-    });
+    points.push({ x: rawF32[i * 2] * scale, y: rawF32[i * 2 + 1] * scale });
   }
 
-  // ── Free ──────────────────────────────────────────────────────────────────
+  // FREE
   cleanup([pixPtr, maskPtr, tracePtr, simpPtr]);
-
   postMessage({ type: 'result', points, rawCount, simpCount, filled });
 }
 

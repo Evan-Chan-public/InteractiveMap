@@ -92,6 +92,8 @@ const map = L.map('map', {
 let imageOverlay = null;
 let mapBounds    = null;
 
+// BRUSH STATE
+
 let brushSizePx      = 30;
 const vertexEdit     = { active: false, regionId: null, handles: [], midHandles: [] };
 let brushCursorLayer = null;
@@ -496,7 +498,8 @@ function applyLayerVisibility() {
 
 // MERGE
 
-// bridges between every cross-pair; empty = non-adjacent (kept as separate rings)
+// Returns intersection polygons between every cross-pair of rings from two polygon arrays.
+// Used to bridge small gaps before a union, so nearly-touching regions merge cleanly.
 function buildBridges(polysA, polysB) {
   const bridges = [];
   for (const a of polysA) {
@@ -724,7 +727,7 @@ function undo() {
   scheduleSave();
 }
 
-// SELECTION/DETAILS
+// SELECTION / NAVIGATION
 
 function selectAnnotation(type, id) {
   navStack.length = 0;
@@ -963,7 +966,7 @@ function renderDetailTree(region) {
   }
 }
 
-// MAP CLICKING
+// MAP EVENTS
 
 map.on('click', (e) => {
   if (state.mode !== 'design') return;

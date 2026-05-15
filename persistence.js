@@ -1,10 +1,8 @@
 import { state } from './state.js';
 
-// PERSISTENCE
-
 export const STORAGE_KEY = 'interactiveMap.annotations.v2';
 
-// object reference lets other modules read/write restoredAwaitingImage as a live value
+// Mutable flags shared across modules via object reference
 export const flags = { restoredAwaitingImage: false };
 
 export function saveAnnotations() {

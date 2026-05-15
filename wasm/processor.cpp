@@ -8,16 +8,13 @@
 
 extern "C" {
 
-// ── Memory helpers ────────────────────────────────────────────────────────────
+// MEMORY
 
 EMSCRIPTEN_KEEPALIVE void* wasmAlloc(int bytes) { return malloc(bytes); }
 EMSCRIPTEN_KEEPALIVE void  wasmFree(void* ptr)  { free(ptr); }
 
-// ── Flood Fill ────────────────────────────────────────────────────────────────
-// Iterative BFS, 4-connectivity.
-// pixels : RGBA, width*height*4 bytes
-// mask   : output uint8, width*height bytes (caller pre-zeroes)
-// Returns number of pixels filled.
+// FLOOD FILL
+// Iterative BFS, 4-connectivity. Returns number of pixels filled.
 
 EMSCRIPTEN_KEEPALIVE
 int floodFill(
@@ -63,11 +60,8 @@ int floodFill(
     return filled;
 }
 
-// ── Moore Neighbourhood Contour Trace ─────────────────────────────────────────
-// Produces an ordered list of boundary pixel centres using Jacob's stopping
-// criterion. Handles single-pixel regions and linear features.
-// outXY   : pre-allocated float array, capacity maxPairs*2 floats
-// Returns number of point pairs written.
+// CONTOUR TRACE
+// Moore neighbourhood, Jacob's stopping criterion. Returns point pairs written.
 
 static const int MX[8] = { 1, 1, 0,-1,-1,-1, 0, 1 };
 static const int MY[8] = { 0,-1,-1,-1, 0, 1, 1, 1 };
@@ -77,7 +71,7 @@ int traceBoundary(
     const uint8_t* mask, int width, int height,
     float* outXY, int maxPairs
 ) {
-    // Find topmost, then leftmost filled pixel
+    // find topmost-leftmost filled pixel
     int startX = -1, startY = -1;
     for (int y = 0; y < height && startX < 0; ++y)
         for (int x = 0; x < width && startX < 0; ++x)
@@ -85,11 +79,10 @@ int traceBoundary(
 
     if (startX < 0) return 0;
 
-    // Single pixel
+    // single pixel — check if truly isolated
     if (mask[startY * width + startX]) {
         outXY[0] = (float)startX;
         outXY[1] = (float)startY;
-        // Check if any neighbours exist
         bool lone = true;
         for (int d = 0; d < 8 && lone; ++d) {
             int nx = startX + MX[d], ny = startY + MY[d];
@@ -100,9 +93,7 @@ int traceBoundary(
     }
 
     int cx = startX, cy = startY;
-    // Entry direction: we approach the start from the left (dir 4 = left),
-    // so backtrack direction is right (dir 0).
-    int prevDir = 6;
+    int prevDir = 6; // approach from left; backtrack = right
     int count = 0;
     bool first = true;
 
@@ -131,10 +122,7 @@ int traceBoundary(
     return count;
 }
 
-// ── Ramer-Douglas-Peucker Simplification ─────────────────────────────────────
-// inXY    : input  [x0,y0, x1,y1, ...] inCount pairs
-// outXY   : output (may alias inXY — copy is safe because we write in-order)
-// epsilon : max deviation in pixels
+// RDP SIMPLIFY
 // Returns number of point pairs in output.
 
 static float perpDist2(

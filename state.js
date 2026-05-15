@@ -15,7 +15,6 @@ export const state = {
 };
 
 // Leaflet layers keyed by annotation id
-// Leaflet layers keyed by annotation id
 export const layers = {
   pins:    {}, // id → L.Marker
   regions: {}, // id → L.FeatureGroup (one L.Polygon per ring)
