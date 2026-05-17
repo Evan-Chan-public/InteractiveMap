@@ -108,6 +108,11 @@ const detailContent    = document.getElementById('detail-content');
 const detailTree       = document.getElementById('detail-tree');
 const mapPlaceholder   = document.getElementById('map-placeholder');
 const btnMode          = document.getElementById('btn-mode');
+const btnShare         = document.getElementById('btn-share');
+const shareDialog      = document.getElementById('share-dialog');
+const shareLock        = document.getElementById('share-lock');
+const shareUrl         = document.getElementById('share-url');
+const shareCopy        = document.getElementById('share-copy');
 const btnUpload        = document.getElementById('tool-upload');
 const uploadInput      = document.getElementById('upload-input');
 const btnRegion        = document.getElementById('tool-region');
@@ -160,14 +165,68 @@ function updatePlaceholder() {
       clearSavedAnnotations();
       updatePlaceholder();
     });
+  } else if (shareLocked) {
+    ph.innerHTML = '<p>No map image provided with this share link.</p>';
   } else {
     ph.innerHTML = '<p>No map loaded.<br/>Switch to Design Mode and upload an image.</p>';
   }
 }
 
+// SHARE
+
+let shareLocked = false; // set on load when URL hash contains a locked share
+
+function buildShareUrl(lock) {
+  const payload = { v: 1, lock, annotations: state.annotations };
+  const bytes   = new TextEncoder().encode(JSON.stringify(payload));
+  const hash    = btoa(String.fromCharCode(...bytes));
+  return `${location.origin}${location.pathname}#${hash}`;
+}
+
+function loadShareHash(hash) {
+  try {
+    const binary = atob(hash);
+    const bytes  = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const payload = JSON.parse(new TextDecoder().decode(bytes));
+    if (!payload?.annotations) return false;
+    if (Array.isArray(payload.annotations.regions)) state.annotations.regions = payload.annotations.regions;
+    if (Array.isArray(payload.annotations.pins))    state.annotations.pins    = payload.annotations.pins;
+    shareLocked = !!payload.lock;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+btnShare.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpen = !shareDialog.classList.contains('hidden');
+  shareDialog.classList.toggle('hidden', isOpen);
+  if (!isOpen) shareUrl.value = buildShareUrl(shareLock.checked);
+});
+
+shareLock.addEventListener('change', () => {
+  shareUrl.value = buildShareUrl(shareLock.checked);
+});
+
+shareCopy.addEventListener('click', () => {
+  navigator.clipboard.writeText(shareUrl.value).then(() => {
+    shareCopy.textContent = 'Copied!';
+    setTimeout(() => { shareCopy.textContent = 'Copy'; }, 1500);
+  });
+});
+
+document.addEventListener('click', (e) => {
+  if (!shareDialog.classList.contains('hidden') && !shareDialog.contains(e.target) && e.target !== btnShare) {
+    shareDialog.classList.add('hidden');
+  }
+});
+
 // MODE
 
 function setMode(mode) {
+  if (mode === 'design' && shareLocked) return;
   state.mode = mode;
   if (mode === 'design') {
     toolsPanel.classList.remove('hidden');
@@ -441,6 +500,7 @@ function mountRegionLayer(region) {
   }
 
   group.on('click', (e) => {
+    if (state.ui.activeTool === 'pin') return; // let map click handle it
     L.DomEvent.stopPropagation(e);
     if (state.ui.mergeSource && state.ui.mergeSource !== region.id) {
       performMerge(state.ui.mergeSource, region.id);
@@ -1247,11 +1307,28 @@ map.on('mouseout', () => { brushPainting = false; brushLastLatLng = null; });
 // INIT
 
 initWorker();
-const hadStored = loadAnnotations();
-if (hadStored) {
+
+const hashData  = location.hash.slice(1);
+const fromShare = hashData && loadShareHash(hashData);
+if (fromShare) {
   colorIndex = state.annotations.regions.length;
-  flags.restoredAwaitingImage = true;
+  if (shareLocked) {
+    btnMode.style.display = 'none';
+    // mount immediately; locked viewer cannot upload an image
+    state.annotations.pins.forEach(mountPinLayer);
+    state.annotations.regions.forEach(mountRegionLayer);
+  } else {
+    flags.restoredAwaitingImage = true; // defer mount until image upload
+  }
   updatePlaceholder();
+} else {
+  const hadStored = loadAnnotations();
+  if (hadStored) {
+    colorIndex = state.annotations.regions.length;
+    flags.restoredAwaitingImage = true;
+    updatePlaceholder();
+  }
 }
+
 setMode('display');
 if (typeof lucide !== 'undefined') lucide.createIcons();

@@ -69,9 +69,22 @@
   <main id="map-container">
     <div id="map"></div>
 
-    <!-- Mode toggle (top-right corner of map) -->
+    <!-- Mode toggle + share (top-right corner of map) -->
     <div id="mode-toggle">
-      <button id="btn-mode">Switch to Design Mode</button>
+      <div>
+        <button id="btn-mode">Switch to Design Mode</button>
+        <button id="btn-share" title="Get a share link">Share</button>
+      </div>
+      <div id="share-dialog" class="hidden">
+        <label class="share-lock-label">
+          <input type="checkbox" id="share-lock" /> Lock Design Mode for viewer
+        </label>
+        <div class="share-url-row">
+          <input id="share-url" type="text" readonly />
+          <button id="share-copy">Copy</button>
+        </div>
+        <p class="share-note">The map image is not included — the viewer will need to upload it.</p>
+      </div>
     </div>
 
     <!-- Placeholder shown when no image is loaded -->

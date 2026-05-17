@@ -1,4 +1,4 @@
-// WASM worker — flood fill → contour trace → RDP simplify → polygon points
+// WASM worker — flood fill -> contour trace -> RDP simplify -> polygon points
 
 importScripts('./processor.js');
 
