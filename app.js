@@ -528,6 +528,7 @@ function setActiveTool(tool) {
   if (!isPaint) hideBrushCursor();
   map.getContainer().style.cursor = isPaint ? 'none' : (tool ? 'crosshair' : '');
   if (isPaint) map.dragging.disable(); else map.dragging.enable();
+  if (tool === 'region') map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
 
   if (tool !== 'region') cancelRegionDraw();
   if (tool !== 'wand')   setWandStatus('');
@@ -702,7 +703,16 @@ function bindSwatchGrid(annotation) {
   });
 }
 
+const CLOSE_PX = 10; // click within this of the first vertex to close the shape
+
 function startRegionDraw(latlng) {
+  if (draw.active && draw.points.length) {
+    const px = map.latLngToContainerPoint(latlng);
+    const distTo = (p) => px.distanceTo(map.latLngToContainerPoint(p));
+    if (draw.points.length >= 3 && distTo(draw.points[0]) < CLOSE_PX) { commitRegion(); return; }
+    // ignore repeat clicks on the last vertex (e.g. the two clicks of a double-click)
+    if (distTo(draw.points[draw.points.length - 1]) < 3) return;
+  }
   if (!draw.active) {
     draw.active  = true;
     draw.points  = [];
@@ -766,7 +776,9 @@ function mountRegionLayer(region) {
   }
 
   group.on('click', (e) => {
-    if (state.ui.activeTool === 'pin') return; // let map click handle it
+    // creation tools and other layers pass the click through to the map
+    if (['pin', 'region', 'wand'].includes(state.ui.activeTool)) return;
+    if (region.layerId !== state.ui.activeLayerId) return;
     L.DomEvent.stopPropagation(e);
     if (state.ui.mergeSource && state.ui.mergeSource !== region.id) {
       performMerge(state.ui.mergeSource, region.id);
