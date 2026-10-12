@@ -211,6 +211,104 @@ body {
   margin: 0;
 }
 
+/* LAYER STRIP */
+
+#layer-strip {
+  position: absolute;
+  top: 12px;
+  left: 52px; /* clear Leaflet's zoom control */
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 320px); /* leave room for mode/share cluster on the right */
+}
+
+#layer-chips {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+
+.layer-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 5px;
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.layer-chip:hover { background: var(--btn-hover); }
+
+.layer-chip.active {
+  border-color: var(--accent);
+  background: var(--btn-hover);
+}
+
+.layer-chip-name {
+  outline: none;
+}
+
+.layer-chip-name[contenteditable="true"] {
+  background: #1a1a1a;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+.layer-chip-close {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+.layer-chip-close:hover { color: #ff6b6b; background: #1a1a1a; }
+
+.layer-chip-close.confirm {
+  color: #ff6b6b;
+  background: #1a1a1a;
+}
+
+.layer-chip.dragging { opacity: 0.4; }
+.layer-chip.drag-over { border-color: var(--accent); }
+
+#layer-add {
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 5px;
+  padding: 4px 9px;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+#layer-add:hover { background: var(--btn-hover); }
+
+/* Dimmed annotations for non-active layers (regions + pins) */
+.leaflet-overlay-pane svg .layer-dim,
+.leaflet-marker-icon.layer-dim {
+  opacity: 0.25;
+}
+
+/* only the active layer is interactive; must outrank leaflet's .leaflet-interactive rule */
+.leaflet-pane > svg path.leaflet-interactive.layer-dim,
+.leaflet-marker-icon.leaflet-interactive.layer-dim {
+  pointer-events: none;
+}
+
 /* MAP PLACEHOLDER */
 
 #map-placeholder {

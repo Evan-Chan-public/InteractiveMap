@@ -82,6 +82,14 @@ Individual annotations can be toggled hidden. Hidden items are invisible in Disp
 ### Navigation
 Clicking a related pin in a region's detail panel (or vice versa) pushes a back-navigation entry, letting you return with the **←** button.
 
+### Layers
+The layer strip (top-left) lists layers bottom → top; higher layers draw above lower ones.
+
+- Only the active layer is interactive. Other layers are dimmed and ignore clicks; switch layers by clicking a chip.
+- New annotations go on the active layer, and the brush/eraser only affect it.
+- In Design Mode: **+** adds a layer, double-click renames, drag reorders, and **×** (click twice) deletes a layer along with its contents.
+- Move an item between layers with the **Layer** dropdown in its editor. Regions on different layers can't be merged.
+
 ### Sharing
 
 Click **Share** (top-right) to generate a URL encoding the current annotations.

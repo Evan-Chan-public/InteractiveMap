@@ -1,7 +1,7 @@
-import { state, layers, historyStack, navStack, HISTORY_MAX } from './state.js';
+import { state, layers, historyStack, redoStack, navStack, HISTORY_MAX } from './state.js';
 import { generateId, escapeHtml, pinsInRegion,
          circlePoly, latlngDist, ringToGeom, MERGE_BUFFER_PX, inflatePolygon } from './utils.js';
-import { flags, scheduleSave, loadAnnotations, clearSavedAnnotations } from './persistence.js';
+import { flags, scheduleSave, loadAnnotations, clearSavedAnnotations, ensureLayers } from './persistence.js';
 
 // WASM WORKER
 
@@ -113,6 +113,8 @@ const shareDialog      = document.getElementById('share-dialog');
 const shareLock        = document.getElementById('share-lock');
 const shareUrl         = document.getElementById('share-url');
 const shareCopy        = document.getElementById('share-copy');
+const layerChips       = document.getElementById('layer-chips');
+const btnLayerAdd      = document.getElementById('layer-add');
 const btnUpload        = document.getElementById('tool-upload');
 const uploadInput      = document.getElementById('upload-input');
 const btnRegion        = document.getElementById('tool-region');
@@ -163,6 +165,9 @@ function updatePlaceholder() {
     `;
     document.getElementById('discard-saved')?.addEventListener('click', () => {
       clearSavedAnnotations();
+      ensureLayers(state.annotations);
+      state.ui.activeLayerId = state.annotations.layers[0].id;
+      renderLayerStrip();
       updatePlaceholder();
     });
   } else if (shareLocked) {
@@ -192,6 +197,8 @@ function loadShareHash(hash) {
     if (!payload?.annotations) return false;
     if (Array.isArray(payload.annotations.regions)) state.annotations.regions = payload.annotations.regions;
     if (Array.isArray(payload.annotations.pins))    state.annotations.pins    = payload.annotations.pins;
+    if (Array.isArray(payload.annotations.layers))  state.annotations.layers  = payload.annotations.layers;
+    ensureLayers(state.annotations);
     shareLocked = !!payload.lock;
     return true;
   } catch {
@@ -223,6 +230,252 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// LAYERS
+
+function renderLayerStrip() {
+  layerChips.innerHTML = '';
+  const editable = state.mode === 'design';
+  const onlyOne  = state.annotations.layers.length === 1;
+  btnLayerAdd.classList.toggle('hidden', !editable);
+
+  state.annotations.layers.forEach(layer => {
+    const chip = document.createElement('div');
+    chip.className = 'layer-chip' + (layer.id === state.ui.activeLayerId ? ' active' : '');
+    chip.dataset.id = layer.id;
+    chip.draggable  = editable;
+
+    const name = document.createElement('span');
+    name.className = 'layer-chip-name';
+    name.textContent = layer.name;
+    chip.appendChild(name);
+
+    if (editable && !onlyOne) {
+      const close = document.createElement('span');
+      close.className = 'layer-chip-close';
+      close.textContent = '×';
+      close.title = 'Delete layer';
+      chip.appendChild(close);
+    }
+
+    chip.addEventListener('click', (e) => {
+      if (e.target === name && name.isContentEditable) return;
+      if (e.target.classList.contains('layer-chip-close')) {
+        handleLayerDelete(layer.id, e.target);
+        return;
+      }
+      setActiveLayer(layer.id);
+    });
+
+    if (editable) {
+      name.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        startRenameLayer(layer.id, name);
+      });
+    }
+
+    chip.addEventListener('dragstart', (e) => {
+      if (name.isContentEditable) { e.preventDefault(); return; }
+      chip.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', layer.id);
+    });
+    chip.addEventListener('dragend', () => {
+      chip.classList.remove('dragging');
+      layerChips.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+    chip.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      chip.classList.add('drag-over');
+    });
+    chip.addEventListener('dragleave', () => chip.classList.remove('drag-over'));
+    chip.addEventListener('drop', (e) => {
+      e.preventDefault();
+      chip.classList.remove('drag-over');
+      const draggedId = e.dataTransfer.getData('text/plain');
+      if (draggedId && draggedId !== layer.id) reorderLayer(draggedId, layer.id);
+    });
+
+    layerChips.appendChild(chip);
+  });
+}
+
+function reorderLayer(draggedId, targetId) {
+  const arr = state.annotations.layers;
+  const from = arr.findIndex(l => l.id === draggedId);
+  const to   = arr.findIndex(l => l.id === targetId);
+  if (from < 0 || to < 0 || from === to) return;
+  pushHistory();
+  const [moved] = arr.splice(from, 1);
+  arr.splice(to, 0, moved);
+  renderLayerStrip();
+  applyZOrder();
+  scheduleSave();
+}
+
+function applyZOrder() {
+  // iterate bottom→top; bringToFront stacks each above the previous
+  for (const layer of state.annotations.layers) {
+    for (const region of state.annotations.regions) {
+      if (region.layerId === layer.id) layers.regions[region.id]?.bringToFront();
+    }
+  }
+}
+
+// regions on higher layers must stay stacked above a freshly mounted one
+function restackAbove(region) {
+  const order = state.annotations.layers.map(l => l.id);
+  for (const layerId of order.slice(order.indexOf(region.layerId) + 1)) {
+    for (const r of state.annotations.regions) {
+      if (r.layerId === layerId) layers.regions[r.id]?.bringToFront();
+    }
+  }
+}
+
+function findAnnotation(type, id) {
+  const list = type === 'region' ? state.annotations.regions : state.annotations.pins;
+  return list.find(a => a.id === id);
+}
+
+function setActiveLayer(id) {
+  if (state.ui.activeLayerId === id) return;
+  state.ui.activeLayerId = id;
+  if (state.ui.mergeSource) cancelMerge();
+  const sel = state.ui.selected;
+  if (sel && findAnnotation(sel.type, sel.id)?.layerId !== id) clearSelection();
+  renderLayerStrip();
+  applyDimming();
+}
+
+// switch to an item's layer without dropping selection (panel / back navigation)
+function followToLayer(type, id) {
+  const item = findAnnotation(type, id);
+  if (!item || item.layerId === state.ui.activeLayerId) return;
+  state.ui.activeLayerId = item.layerId;
+  if (state.ui.mergeSource) state.ui.mergeSource = null;
+  renderLayerStrip();
+  applyDimming();
+}
+
+function moveToLayer(type, item, layerId) {
+  if (item.layerId === layerId) return;
+  pushHistory();
+  item.layerId = layerId;
+  if (type === 'region') remountRegionLayer(item); // restack at new position
+  followToLayer(type, item.id);
+  scheduleSave();
+}
+
+function addLayer() {
+  pushHistory();
+  const layer = { id: generateId(), name: `Layer ${state.annotations.layers.length + 1}` };
+  state.annotations.layers.push(layer);
+  state.ui.activeLayerId = layer.id;
+  renderLayerStrip();
+  applyDimming();
+  scheduleSave();
+}
+
+let pendingDelete = { id: null, timer: null };
+function handleLayerDelete(id, closeEl) {
+  if (pendingDelete.id === id) {
+    clearTimeout(pendingDelete.timer);
+    pendingDelete = { id: null, timer: null };
+    deleteLayer(id);
+    return;
+  }
+  if (pendingDelete.id) clearTimeout(pendingDelete.timer);
+  closeEl.classList.add('confirm');
+  pendingDelete.id = id;
+  pendingDelete.timer = setTimeout(() => {
+    closeEl.classList.remove('confirm');
+    pendingDelete = { id: null, timer: null };
+  }, 2500);
+}
+
+function deleteLayer(id) {
+  if (state.annotations.layers.length <= 1) return;
+  pushHistory();
+
+  // remove all regions and pins in this layer (and their Leaflet layers)
+  state.annotations.regions = state.annotations.regions.filter(r => {
+    if (r.layerId !== id) return true;
+    layers.regions[r.id]?.remove();
+    delete layers.regions[r.id];
+    return false;
+  });
+  state.annotations.pins = state.annotations.pins.filter(p => {
+    if (p.layerId !== id) return true;
+    layers.pins[p.id]?.remove();
+    delete layers.pins[p.id];
+    return false;
+  });
+
+  const idx = state.annotations.layers.findIndex(l => l.id === id);
+  state.annotations.layers.splice(idx, 1);
+
+  if (state.ui.activeLayerId === id) {
+    const fallback = state.annotations.layers[Math.max(0, idx - 1)];
+    state.ui.activeLayerId = fallback.id;
+  }
+  if (state.ui.selected) clearSelection();
+
+  renderLayerStrip();
+  applyDimming();
+  scheduleSave();
+}
+
+function startRenameLayer(id, nameEl) {
+  nameEl.contentEditable = 'true';
+  nameEl.focus();
+  const range = document.createRange();
+  range.selectNodeContents(nameEl);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  const commit = () => {
+    nameEl.contentEditable = 'false';
+    nameEl.removeEventListener('blur', commit);
+    nameEl.removeEventListener('keydown', onKey);
+    const layer = state.annotations.layers.find(l => l.id === id);
+    const next  = nameEl.textContent.trim();
+    if (layer && next && next !== layer.name) {
+      pushHistory();
+      layer.name = next;
+      scheduleSave();
+    } else if (layer) {
+      nameEl.textContent = layer.name;
+    }
+  };
+  const onKey = (e) => {
+    if (e.key === 'Enter')  { e.preventDefault(); nameEl.blur(); }
+    if (e.key === 'Escape') { e.preventDefault(); nameEl.textContent = state.annotations.layers.find(l => l.id === id)?.name || ''; nameEl.blur(); }
+  };
+  nameEl.addEventListener('blur', commit);
+  nameEl.addEventListener('keydown', onKey);
+}
+
+function applyDimming() {
+  const activeId = state.ui.activeLayerId;
+  state.annotations.regions.forEach(region => {
+    const group = layers.regions[region.id];
+    if (!group) return;
+    const dim = region.layerId !== activeId;
+    group.eachLayer(l => {
+      const el = l.getElement();
+      if (el) el.classList.toggle('layer-dim', dim);
+    });
+  });
+  state.annotations.pins.forEach(pin => {
+    const marker = layers.pins[pin.id];
+    if (!marker) return;
+    const el = marker.getElement();
+    if (el) el.classList.toggle('layer-dim', pin.layerId !== activeId);
+  });
+}
+
+btnLayerAdd.addEventListener('click', addLayer);
+
 // MODE
 
 function setMode(mode) {
@@ -238,6 +491,7 @@ function setMode(mode) {
     cancelRegionDraw();
   }
   applyLayerVisibility();
+  renderLayerStrip();
   renderDetailPanel();
 }
 
@@ -322,6 +576,7 @@ function applyImage(url, width, height) {
   if (flags.restoredAwaitingImage) {
     state.annotations.pins.forEach(mountPinLayer);
     state.annotations.regions.forEach(mountRegionLayer);
+    applyZOrder();
     flags.restoredAwaitingImage = false;
   }
 }
@@ -331,11 +586,12 @@ function applyImage(url, width, height) {
 function addPin(latlng) {
   pushHistory();
   const pin = {
-    id:     generateId(),
-    latlng: { lat: latlng.lat, lng: latlng.lng },
-    label:  'New Pin',
-    body:   '',
-    hidden: false,
+    id:      generateId(),
+    latlng:  { lat: latlng.lat, lng: latlng.lng },
+    label:   'New Pin',
+    body:    '',
+    hidden:  false,
+    layerId: state.ui.activeLayerId,
   };
   state.annotations.pins.push(pin);
   mountPinLayer(pin);
@@ -351,6 +607,9 @@ function mountPinLayer(pin) {
     selectAnnotation('pin', pin.id);
   });
   layers.pins[pin.id] = marker;
+  if (pin.layerId !== state.ui.activeLayerId) {
+    marker.getElement()?.classList.add('layer-dim');
+  }
 }
 
 function updatePinLayer(pin) {
@@ -469,6 +728,7 @@ function commitRegion() {
     label:    'New Region',
     body:     '',
     hidden:   false,
+    layerId:  state.ui.activeLayerId,
   };
   state.annotations.regions.push(region);
   cancelRegionDraw();
@@ -525,6 +785,10 @@ function mountRegionLayer(region) {
   });
 
   layers.regions[region.id] = group;
+  if (region.layerId !== state.ui.activeLayerId) {
+    group.eachLayer(l => l.getElement()?.classList.add('layer-dim'));
+  }
+  restackAbove(region);
 }
 
 function updateRegionLayer(region) {
@@ -593,6 +857,11 @@ function performMerge(targetId, sourceId) {
   const target = state.annotations.regions.find(r => r.id === targetId);
   const source = state.annotations.regions.find(r => r.id === sourceId);
   if (!target || !source) { cancelMerge(); return; }
+  if (target.layerId !== source.layerId) {
+    setWandStatus('Merge blocked: regions are on different layers. Move one first.');
+    cancelMerge();
+    return;
+  }
   pushHistory();
 
   if (typeof polygonClipping === 'undefined') {
@@ -738,6 +1007,7 @@ function onWandResult({ points, simpCount, filled }) {
     label:    'New Region',
     body:     '',
     hidden:   false,
+    layerId:  state.ui.activeLayerId,
   };
   state.annotations.regions.push(region);
   mountRegionLayer(region);
@@ -771,19 +1041,48 @@ function pushHistory() {
   if (historyStack.length > HISTORY_MAX) historyStack.shift();
 }
 
+// redo stays valid only while annotations are untouched since the last undo/redo.
+// checked lazily rather than in pushHistory, since focus handlers push without editing
+let restoredSnap = null;
+
 function undo() {
   exitVertexEdit();
+  const cur = JSON.stringify(state.annotations);
+  if (cur !== restoredSnap) redoStack.length = 0;
+  // skip no-op entries (focus pushes, cancelled merges) so undo always changes something
+  while (historyStack.at(-1) === cur) historyStack.pop();
   if (!historyStack.length) return;
-  const snap = JSON.parse(historyStack.pop());
+  redoStack.push(cur);
+  restoreSnapshot(historyStack.pop());
+}
+
+function redo() {
+  exitVertexEdit();
+  const cur = JSON.stringify(state.annotations);
+  if (cur !== restoredSnap) redoStack.length = 0;
+  if (!redoStack.length) return;
+  pushHistory();
+  restoreSnapshot(redoStack.pop());
+}
+
+function restoreSnapshot(json) {
+  const snap = JSON.parse(json);
   Object.values(layers.pins).forEach(m => m.remove());
   Object.values(layers.regions).forEach(g => g.remove());
   layers.pins    = {};
   layers.regions = {};
   state.annotations = snap;
+  // active layer may no longer exist after undo/redo
+  if (!state.annotations.layers.some(l => l.id === state.ui.activeLayerId)) {
+    state.ui.activeLayerId = state.annotations.layers[0]?.id ?? null;
+  }
   state.annotations.pins.forEach(mountPinLayer);
   state.annotations.regions.forEach(mountRegionLayer);
   applyLayerVisibility();
+  applyZOrder();
+  renderLayerStrip();
   clearSelection();
+  restoredSnap = JSON.stringify(state.annotations);
   scheduleSave();
 }
 
@@ -791,6 +1090,7 @@ function undo() {
 
 function selectAnnotation(type, id) {
   navStack.length = 0;
+  followToLayer(type, id);
   state.ui.selected = { type, id };
   detailPanel.classList.remove('hidden');
   renderDetailPanel();
@@ -798,6 +1098,7 @@ function selectAnnotation(type, id) {
 
 function navigateAnnotation(type, id) {
   if (state.ui.selected) navStack.push({ ...state.ui.selected });
+  followToLayer(type, id);
   state.ui.selected = { type, id };
   detailPanel.classList.remove('hidden');
   renderDetailPanel();
@@ -806,6 +1107,7 @@ function navigateAnnotation(type, id) {
 function goBack() {
   if (!navStack.length) return;
   state.ui.selected = navStack.pop();
+  followToLayer(state.ui.selected.type, state.ui.selected.id);
   renderDetailPanel();
 }
 
@@ -909,6 +1211,13 @@ function renderDetailEditor(annotation, type) {
        </div>`
     : '';
 
+  const layerSelect = state.annotations.layers.length > 1 ? `
+    <label class="field-label" for="edit-layer">Layer</label>
+    <select id="edit-layer" class="field-input">
+      ${state.annotations.layers.map(l => `
+        <option value="${l.id}" ${l.id === annotation.layerId ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
+    </select>` : '';
+
   const polyCount = isRegion ? annotation.polygons.length : 0;
   const polyHint  = isRegion
     ? `<div class="field-label" style="margin-top:6px">${polyCount} polygon${polyCount === 1 ? '' : 's'}</div>`
@@ -929,6 +1238,7 @@ function renderDetailEditor(annotation, type) {
       <input id="edit-label" type="text" class="field-input"
              value="${escapeHtml(annotation.label || '')}" placeholder="Label…" />
 
+      ${layerSelect}
       ${colorSwatch}
       ${polyHint}
 
@@ -968,6 +1278,10 @@ function renderDetailEditor(annotation, type) {
     annotation.hidden = hiddenCheck.checked;
     applyLayerVisibility();
     scheduleSave();
+  });
+
+  document.getElementById('edit-layer')?.addEventListener('change', (e) => {
+    moveToLayer(type, annotation, e.target.value);
   });
 
   if (isRegion) bindSwatchGrid(annotation);
@@ -1045,10 +1359,21 @@ map.on('dblclick', (e) => {
   }
 });
 
+// text fields the user has typed in keep native ctrl+z (fields are rebuilt on each render)
+const typedFields = new WeakSet();
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (t.isContentEditable || t.tagName === 'TEXTAREA' || t.type === 'text') typedFields.add(t);
+});
+
 document.addEventListener('keydown', (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+  const key    = e.key?.toLowerCase();
+  const isUndo = (e.metaKey || e.ctrlKey) && key === 'z' && !e.shiftKey;
+  const isRedo = ((e.metaKey || e.ctrlKey) && key === 'z' && e.shiftKey) || (e.ctrlKey && key === 'y');
+  if (isUndo || isRedo) {
+    if (typedFields.has(e.target)) return;
     e.preventDefault();
-    undo();
+    if (isUndo) undo(); else redo();
     return;
   }
   if (e.key !== 'Escape') return;
@@ -1196,6 +1521,7 @@ function applyBrush(latlng) {
   let isNew  = false;
   if (state.ui.selected?.type === 'region') {
     region = state.annotations.regions.find(r2 => r2.id === state.ui.selected.id);
+    if (region?.layerId !== state.ui.activeLayerId) region = null;
   }
   if (!region) {
     region = {
@@ -1205,6 +1531,7 @@ function applyBrush(latlng) {
       label:    'New Region',
       body:     '',
       hidden:   false,
+      layerId:  state.ui.activeLayerId,
     };
     state.annotations.regions.push(region);
     isNew = true;
@@ -1238,6 +1565,7 @@ function applyEraser(latlng) {
 
   state.annotations.regions.forEach(region => {
     if (!region.polygons.length) return;
+    if (region.layerId !== state.ui.activeLayerId) return; // eraser is locked to active layer
 
     const group = layers.regions[region.id];
     if (group) {
@@ -1312,14 +1640,8 @@ const hashData  = location.hash.slice(1);
 const fromShare = hashData && loadShareHash(hashData);
 if (fromShare) {
   colorIndex = state.annotations.regions.length;
-  if (shareLocked) {
-    btnMode.style.display = 'none';
-    // mount immediately; locked viewer cannot upload an image
-    state.annotations.pins.forEach(mountPinLayer);
-    state.annotations.regions.forEach(mountRegionLayer);
-  } else {
-    flags.restoredAwaitingImage = true; // defer mount until image upload
-  }
+  if (shareLocked) btnMode.style.display = 'none';
+  else flags.restoredAwaitingImage = true; // defer mount until image upload
   updatePlaceholder();
 } else {
   const hadStored = loadAnnotations();
@@ -1328,6 +1650,18 @@ if (fromShare) {
     flags.restoredAwaitingImage = true;
     updatePlaceholder();
   }
+}
+
+// guarantee at least one layer + a valid active layer (fresh maps land here too)
+ensureLayers(state.annotations);
+state.ui.activeLayerId = state.annotations.layers[0].id;
+renderLayerStrip();
+
+// locked share with no image: mount now so viewer can interact with annotations
+if (fromShare && shareLocked) {
+  state.annotations.pins.forEach(mountPinLayer);
+  state.annotations.regions.forEach(mountRegionLayer);
+  applyZOrder();
 }
 
 setMode('display');
