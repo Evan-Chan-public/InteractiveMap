@@ -736,6 +736,25 @@ body {
   color: var(--accent);
 }
 
+/* layer list rows (right panel, nothing selected) */
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 14px;
+}
+
+.item-row-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-hidden {
+  opacity: 0.5;
+  font-style: italic;
+}
+
 /* BRUSH CONTROLS (hidden until brush/eraser active — toggled via .hidden class) */
 
 /* VERTEX EDIT HANDLES */

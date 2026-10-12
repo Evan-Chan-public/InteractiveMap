@@ -104,6 +104,7 @@ let brushLastLatLng  = null;
 
 const toolsPanel       = document.getElementById('tools-panel');
 const detailPanel      = document.getElementById('detail-panel');
+const detailHeader     = detailPanel.querySelector('.panel-header');
 const detailContent    = document.getElementById('detail-content');
 const detailTree       = document.getElementById('detail-tree');
 const mapPlaceholder   = document.getElementById('map-placeholder');
@@ -344,6 +345,7 @@ function setActiveLayer(id) {
   if (sel && findAnnotation(sel.type, sel.id)?.layerId !== id) clearSelection();
   renderLayerStrip();
   applyDimming();
+  refreshLayerList();
 }
 
 // switch to an item's layer without dropping selection (panel / back navigation)
@@ -372,6 +374,7 @@ function addLayer() {
   state.ui.activeLayerId = layer.id;
   renderLayerStrip();
   applyDimming();
+  refreshLayerList();
   scheduleSave();
 }
 
@@ -421,6 +424,7 @@ function deleteLayer(id) {
 
   renderLayerStrip();
   applyDimming();
+  refreshLayerList();
   scheduleSave();
 }
 
@@ -442,6 +446,7 @@ function startRenameLayer(id, nameEl) {
     if (layer && next && next !== layer.name) {
       pushHistory();
       layer.name = next;
+      refreshLayerList();
       scheduleSave();
     } else if (layer) {
       nameEl.textContent = layer.name;
@@ -579,6 +584,7 @@ function applyImage(url, width, height) {
     applyZOrder();
     flags.restoredAwaitingImage = false;
   }
+  renderDetailPanel();
 }
 
 // PINS
@@ -1092,7 +1098,6 @@ function selectAnnotation(type, id) {
   navStack.length = 0;
   followToLayer(type, id);
   state.ui.selected = { type, id };
-  detailPanel.classList.remove('hidden');
   renderDetailPanel();
 }
 
@@ -1100,12 +1105,11 @@ function navigateAnnotation(type, id) {
   if (state.ui.selected) navStack.push({ ...state.ui.selected });
   followToLayer(type, id);
   state.ui.selected = { type, id };
-  detailPanel.classList.remove('hidden');
   renderDetailPanel();
 }
 
 function goBack() {
-  if (!navStack.length) return;
+  if (!navStack.length) { clearSelection(); return; }
   state.ui.selected = navStack.pop();
   followToLayer(state.ui.selected.type, state.ui.selected.id);
   renderDetailPanel();
@@ -1114,7 +1118,6 @@ function goBack() {
 function clearSelection() {
   navStack.length = 0;
   state.ui.selected = null;
-  detailPanel.classList.add('hidden');
   renderDetailPanel();
 }
 
@@ -1130,9 +1133,13 @@ function renderDetailPanel() {
     if (source && target) { renderDetailTree(null); renderMergePreview(source, target); return; }
   }
 
+  setPanelVisible(!!sel || showsLayerList());
+  detailHeader.textContent = sel ? 'Details' : 'Layer';
+
   if (!sel) {
     renderDetailTree(null);
-    detailContent.innerHTML = '<p class="detail-empty">Click a region or pin to see details.</p>';
+    if (showsLayerList()) renderLayerList();
+    else detailContent.innerHTML = '<p class="detail-empty">Click a region or pin to see details.</p>';
     return;
   }
 
@@ -1147,6 +1154,59 @@ function renderDetailPanel() {
   } else {
     renderDetailView(annotation);
   }
+}
+
+// LAYER LIST (right panel, nothing selected)
+
+function showsLayerList() {
+  return state.mode === 'design' && !!state.image;
+}
+
+function setPanelVisible(visible) {
+  if (detailPanel.classList.contains('hidden') !== visible) return;
+  detailPanel.classList.toggle('hidden', !visible);
+  map.invalidateSize(); // map container width changed
+}
+
+// re-render the list if it's what the panel is showing
+function refreshLayerList() {
+  if (!state.ui.selected) renderDetailPanel();
+}
+
+function renderLayerList() {
+  const layer   = state.annotations.layers.find(l => l.id === state.ui.activeLayerId);
+  const regions = state.annotations.regions.filter(r => r.layerId === layer?.id);
+  const pins    = state.annotations.pins.filter(p => p.layerId === layer?.id);
+
+  const row = (type, a) => `
+    <div class="pin-list-item item-row${a.hidden ? ' item-hidden' : ''}" data-type="${type}" data-id="${a.id}">
+      ${type === 'region' ? `<span class="color-wheel" style="background:${a.color || '#4a9eff'}"></span>` : ''}
+      <span class="item-row-label">${escapeHtml(a.label || (type === 'region' ? 'Untitled region' : 'Untitled pin'))}</span>
+    </div>`;
+  const section = (title, type, items) => items.length ? `
+    <details class="pin-list" open>
+      <summary class="pin-list-summary">${title} (${items.length})</summary>
+      ${items.map(a => row(type, a)).join('')}
+    </details>` : '';
+
+  const sections = section('Regions', 'region', regions) + section('Pins', 'pin', pins);
+  detailContent.innerHTML = `
+    <h2 class="detail-title">${escapeHtml(layer?.name || 'Layer')}</h2>
+    ${sections || '<p class="detail-empty">Nothing on this layer yet.</p>'}
+  `;
+
+  detailContent.querySelectorAll('.item-row').forEach(el => {
+    el.addEventListener('click', () => {
+      const { type, id } = el.dataset;
+      selectAnnotation(type, id);
+      const item = findAnnotation(type, id);
+      if (type === 'pin' && item) map.panTo(item.latlng);
+      if (type === 'region') {
+        const bounds = layers.regions[id]?.getBounds();
+        if (bounds?.isValid()) map.panTo(bounds.getCenter());
+      }
+    });
+  });
 }
 
 function renderMergePreview(source, target) {
@@ -1168,7 +1228,11 @@ function renderMergePreview(source, target) {
 }
 
 function backButtonHtml() {
-  if (!navStack.length) return '';
+  if (!navStack.length) {
+    if (!showsLayerList()) return '';
+    const layer = state.annotations.layers.find(l => l.id === state.ui.activeLayerId);
+    return `<button id="nav-back" class="btn-back">← ${escapeHtml(layer?.name || 'Layer')}</button>`;
+  }
   const prev = navStack[navStack.length - 1];
   const list = prev.type === 'region' ? state.annotations.regions : state.annotations.pins;
   const label = list.find(a => a.id === prev.id)?.label || 'Untitled';
@@ -1593,6 +1657,7 @@ function applyEraser(latlng) {
       layers.regions[region.id]?.remove();
       delete layers.regions[region.id];
       if (state.ui.selected?.id === region.id) clearSelection();
+      else refreshLayerList();
       scheduleSave();
       return;
     }
