@@ -90,6 +90,14 @@ The layer strip (top-left) lists layers bottom → top; higher layers draw above
 - In Design Mode: **+** adds a layer, double-click renames, drag reorders, and **×** (click twice) deletes a layer along with its contents.
 - Move an item between layers with the **Layer** dropdown in its editor. Regions on different layers can't be merged.
 
+### Nesting
+Every region and pin can have a parent region on another layer, forming a tree.
+
+- Parents are assigned automatically: the region on the nearest layer below that covers most of the item (for pins, contains the point). Empty layers are skipped.
+- Links are recalculated when an item is created, reshaped or moved between layers, or when its parent is deleted. **Reordering layers does not change them.** Use **Re-nest layer** / **Re-nest all** (right panel, nothing selected) to reassign after a reorder.
+- Set a parent by hand with the **Parent** dropdown in the editor. Manual parents are kept through re-nesting; choose **Auto** to go back.
+- A selected item's panel shows a breadcrumb of its ancestors and an expandable **Contains** tree of its children; click any entry to jump to it.
+
 ### Sharing
 
 Click **Share** (top-right) to generate a URL encoding the current annotations.

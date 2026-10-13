@@ -1,7 +1,9 @@
 import { state, layers, historyStack, redoStack, navStack, HISTORY_MAX } from './state.js';
-import { generateId, escapeHtml, pinsInRegion,
+import { generateId, escapeHtml,
          circlePoly, latlngDist, ringToGeom, MERGE_BUFFER_PX, inflatePolygon } from './utils.js';
 import { flags, scheduleSave, loadAnnotations, clearSavedAnnotations, ensureLayers } from './persistence.js';
+import { childrenOf, ancestorsOf, autoParent, wouldCycle, findItem, renest, renestAround,
+         orphanChildrenOf, renestAll, ensureNesting } from './nesting.js';
 
 // WASM WORKER
 
@@ -362,6 +364,7 @@ function moveToLayer(type, item, layerId) {
   if (item.layerId === layerId) return;
   pushHistory();
   item.layerId = layerId;
+  renestAround(item);
   if (type === 'region') remountRegionLayer(item); // restack at new position
   followToLayer(type, item.id);
   scheduleSave();
@@ -400,6 +403,7 @@ function deleteLayer(id) {
   pushHistory();
 
   // remove all regions and pins in this layer (and their Leaflet layers)
+  const removedIds = state.annotations.regions.filter(r => r.layerId === id).map(r => r.id);
   state.annotations.regions = state.annotations.regions.filter(r => {
     if (r.layerId !== id) return true;
     layers.regions[r.id]?.remove();
@@ -415,6 +419,7 @@ function deleteLayer(id) {
 
   const idx = state.annotations.layers.findIndex(l => l.id === id);
   state.annotations.layers.splice(idx, 1);
+  orphanChildrenOf(removedIds);
 
   if (state.ui.activeLayerId === id) {
     const fallback = state.annotations.layers[Math.max(0, idx - 1)];
@@ -602,6 +607,7 @@ function addPin(latlng) {
     layerId: state.ui.activeLayerId,
   };
   state.annotations.pins.push(pin);
+  renestAround(pin);
   mountPinLayer(pin);
   selectAnnotation('pin', pin.id);
   scheduleSave();
@@ -748,6 +754,7 @@ function commitRegion() {
     layerId:  state.ui.activeLayerId,
   };
   state.annotations.regions.push(region);
+  renestAround(region);
   cancelRegionDraw();
   mountRegionLayer(region);
   selectAnnotation('region', region.id);
@@ -914,6 +921,8 @@ function performMerge(targetId, sourceId) {
   delete layers.regions[sourceId];
   layers.regions[targetId]?.remove();
   delete layers.regions[targetId];
+  orphanChildrenOf([sourceId]);
+  renestAround(target);
   mountRegionLayer(target);
 
   state.ui.mergeSource = targetId;
@@ -949,6 +958,7 @@ function consolidateRegion(regionId) {
   if (!result?.length) return;
 
   region.polygons = result.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
+  renestAround(region);
   layers.regions[regionId]?.remove();
   delete layers.regions[regionId];
   mountRegionLayer(region);
@@ -1029,6 +1039,7 @@ function onWandResult({ points, simpCount, filled }) {
     layerId:  state.ui.activeLayerId,
   };
   state.annotations.regions.push(region);
+  renestAround(region);
   mountRegionLayer(region);
   selectAnnotation('region', region.id);
   scheduleSave();
@@ -1046,6 +1057,7 @@ function deleteAnnotation(type, id) {
     state.annotations.regions = state.annotations.regions.filter(r => r.id !== id);
     layers.regions[id]?.remove();
     delete layers.regions[id];
+    orphanChildrenOf([id]);
   }
   clearSelection();
   scheduleSave();
@@ -1160,7 +1172,7 @@ function renderDetailPanel() {
   const annotation = list.find(a => a.id === sel.id);
   if (!annotation) { clearSelection(); return; }
 
-  renderDetailTree(sel.type === 'region' ? annotation : null);
+  renderDetailTree(annotation);
 
   if (state.mode === 'design') {
     renderDetailEditor(annotation, sel.type);
@@ -1195,6 +1207,7 @@ function renderLayerList() {
     <div class="pin-list-item item-row${a.hidden ? ' item-hidden' : ''}" data-type="${type}" data-id="${a.id}">
       ${type === 'region' ? `<span class="color-wheel" style="background:${a.color || '#4a9eff'}"></span>` : ''}
       <span class="item-row-label">${escapeHtml(a.label || (type === 'region' ? 'Untitled region' : 'Untitled pin'))}</span>
+      ${a.parentId ? `<span class="item-row-parent">in ${escapeHtml(findItem(a.parentId)?.label || 'Untitled')}</span>` : ''}
     </div>`;
   const section = (title, type, items) => items.length ? `
     <details class="pin-list" open>
@@ -1206,18 +1219,30 @@ function renderLayerList() {
   detailContent.innerHTML = `
     <h2 class="detail-title">${escapeHtml(layer?.name || 'Layer')}</h2>
     ${sections || '<p class="detail-empty">Nothing on this layer yet.</p>'}
+    <div class="editor-actions renest-actions">
+      <button id="renest-layer" class="btn-secondary" title="Re-run automatic nesting for this layer's items (manual parents are kept)">Re-nest layer</button>
+      <button id="renest-all" class="btn-secondary" title="Re-run automatic nesting for every item (manual parents are kept)">Re-nest all</button>
+    </div>
   `;
+
+  const bindRenest = (btnId, layerId) => {
+    document.getElementById(btnId)?.addEventListener('click', () => {
+      pushHistory();
+      renestAll(layerId);
+      scheduleSave();
+      renderLayerList();
+      const btn = document.getElementById(btnId);
+      if (btn) { btn.textContent = 'Done'; setTimeout(() => { btn.textContent = btnId === 'renest-all' ? 'Re-nest all' : 'Re-nest layer'; }, 1200); }
+    });
+  };
+  bindRenest('renest-layer', layer?.id);
+  bindRenest('renest-all', null);
 
   detailContent.querySelectorAll('.item-row').forEach(el => {
     el.addEventListener('click', () => {
       const { type, id } = el.dataset;
       selectAnnotation(type, id);
-      const item = findAnnotation(type, id);
-      if (type === 'pin' && item) map.panTo(item.latlng);
-      if (type === 'region') {
-        const bounds = layers.regions[id]?.getBounds();
-        if (bounds?.isValid()) map.panTo(bounds.getCenter());
-      }
+      panToItem(type, id);
     });
   });
 }
@@ -1295,6 +1320,28 @@ function renderDetailEditor(annotation, type) {
         <option value="${l.id}" ${l.id === annotation.layerId ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
     </select>` : '';
 
+  const parentSelect = (() => {
+    const auto      = autoParent(annotation);
+    const autoLabel = auto ? escapeHtml(findItem(auto)?.label || 'Untitled') : 'top level';
+    const current   = annotation.parentManual ? (annotation.parentId ?? '__none') : '';
+    const groups    = state.annotations.layers
+      .filter(l => l.id !== annotation.layerId)
+      .map(l => {
+        const opts = state.annotations.regions
+          .filter(r => r.layerId === l.id && !wouldCycle(annotation.id, r.id))
+          .map(r => `<option value="${r.id}" ${current === r.id ? 'selected' : ''}>${escapeHtml(r.label || 'Untitled')}</option>`)
+          .join('');
+        return opts ? `<optgroup label="${escapeHtml(l.name)}">${opts}</optgroup>` : '';
+      }).join('');
+    return `
+      <label class="field-label" for="edit-parent">Parent</label>
+      <select id="edit-parent" class="field-input">
+        <option value="" ${current === '' ? 'selected' : ''}>Auto (${autoLabel})</option>
+        <option value="__none" ${current === '__none' ? 'selected' : ''}>None (top level)</option>
+        ${groups}
+      </select>`;
+  })();
+
   const polyCount = isRegion ? annotation.polygons.length : 0;
   const polyHint  = isRegion
     ? `<div class="field-label" style="margin-top:6px">${polyCount} polygon${polyCount === 1 ? '' : 's'}</div>`
@@ -1316,6 +1363,7 @@ function renderDetailEditor(annotation, type) {
              value="${escapeHtml(annotation.label || '')}" placeholder="Label…" />
 
       ${layerSelect}
+      ${parentSelect}
       ${colorSwatch}
       ${polyHint}
 
@@ -1359,6 +1407,21 @@ function renderDetailEditor(annotation, type) {
 
   document.getElementById('edit-layer')?.addEventListener('change', (e) => {
     moveToLayer(type, annotation, e.target.value);
+    renderDetailPanel(); // parent options depend on the layer
+  });
+
+  document.getElementById('edit-parent')?.addEventListener('change', (e) => {
+    pushHistory();
+    const v = e.target.value;
+    if (v === '') {
+      annotation.parentManual = false;
+      renest([annotation]);
+    } else {
+      annotation.parentManual = true;
+      annotation.parentId     = v === '__none' ? null : v;
+    }
+    scheduleSave();
+    renderDetailTree(annotation);
   });
 
   if (isRegion) bindSwatchGrid(annotation);
@@ -1382,39 +1445,83 @@ function renderDetailEditor(annotation, type) {
   labelInput.select();
 }
 
-function renderTreeHtml(region) {
-  const allPins = pinsInRegion(region);
-  const pins = state.mode === 'display' ? allPins.filter(p => !p.hidden) : allPins;
-  if (!pins.length) return '';
-  const items = pins.map(p => `
-    <div class="pin-list-item" data-pin-id="${p.id}">
-      ${escapeHtml(p.label || 'Untitled pin')}
-    </div>`).join('');
-  return `
-    <details class="pin-list" open>
-      <summary class="pin-list-summary">Pins (${pins.length})</summary>
-      ${items}
-    </details>`;
+// NESTING TREE (breadcrumb + nested children above the details)
+
+const visibleInMode = (it) => state.mode !== 'display' || !it.hidden;
+
+function treeLinkHtml(type, item) {
+  const dot = type === 'region'
+    ? `<span class="color-wheel" style="background:${item.color || '#4a9eff'}"></span>` : '';
+  const fallback = type === 'region' ? 'Untitled region' : 'Untitled pin';
+  return `<span class="tree-link" data-type="${type}" data-id="${item.id}">${dot}${escapeHtml(item.label || fallback)}</span>`;
 }
 
-function renderDetailTree(region) {
-  if (!detailTree) return;
-  const html = region ? renderTreeHtml(region) : '';
-  if (html) {
-    detailTree.innerHTML = html;
-    detailTree.classList.remove('hidden');
-    detailTree.querySelectorAll('[data-pin-id]').forEach(el => {
-      el.addEventListener('click', () => {
-        const pin = state.annotations.pins.find(p => p.id === el.dataset.pinId);
-        if (!pin) return;
-        navigateAnnotation('pin', pin.id);
-        map.panTo(pin.latlng);
-      });
-    });
-  } else {
-    detailTree.innerHTML = '';
-    detailTree.classList.add('hidden');
+function childCount(id) {
+  const { regions, pins } = childrenOf(id);
+  return regions.filter(visibleInMode).length + pins.filter(visibleInMode).length;
+}
+
+// regions expand in place (<details>) when they have children of their own
+function childNodesHtml(id, seen = new Set([id])) {
+  const { regions, pins } = childrenOf(id);
+  const regionHtml = regions.filter(visibleInMode).map(r => {
+    if (seen.has(r.id) || !childCount(r.id)) return `<div class="tree-leaf">${treeLinkHtml('region', r)}</div>`;
+    return `
+      <details class="tree-node">
+        <summary>${treeLinkHtml('region', r)} <span class="tree-count">${childCount(r.id)}</span></summary>
+        <div class="tree-children">${childNodesHtml(r.id, new Set([...seen, r.id]))}</div>
+      </details>`;
+  }).join('');
+  const pinHtml = pins.filter(visibleInMode)
+    .map(p => `<div class="tree-leaf tree-pin">${treeLinkHtml('pin', p)}</div>`).join('');
+  return regionHtml + pinHtml;
+}
+
+function renderTreeHtml(item) {
+  const crumbs = ancestorsOf(item).filter(visibleInMode);
+  const crumbHtml = crumbs.length
+    ? `<div class="tree-crumbs">${crumbs.map(a => treeLinkHtml('region', a)).join('<span class="tree-sep">›</span>')}</div>`
+    : '';
+  const count = item.polygons ? childCount(item.id) : 0;
+  const kidsHtml = count ? `
+    <details class="pin-list" open>
+      <summary class="pin-list-summary">Contains (${count})</summary>
+      <div class="tree-children">${childNodesHtml(item.id)}</div>
+    </details>` : '';
+  return crumbHtml + kidsHtml;
+}
+
+function panToItem(type, id) {
+  const item = findAnnotation(type, id);
+  if (type === 'pin' && item) map.panTo(item.latlng);
+  if (type === 'region') {
+    const bounds = layers.regions[id]?.getBounds();
+    if (bounds?.isValid()) map.panTo(bounds.getCenter());
   }
+}
+
+function renderDetailTree(item) {
+  if (!detailTree) return;
+  const html = item ? renderTreeHtml(item) : '';
+  detailTree.innerHTML = html;
+  detailTree.classList.toggle('hidden', !html);
+  detailTree.querySelectorAll('.tree-link').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault(); // don't toggle the <details> the link sits in
+      e.stopPropagation();
+      const { type, id } = el.dataset;
+      if (!findAnnotation(type, id)) return;
+      navigateAnnotation(type, id);
+      panToItem(type, id);
+    });
+  });
+}
+
+// refresh nesting views after links change, without re-rendering (and refocusing) the editor
+function refreshTree() {
+  const sel = state.ui.selected;
+  if (sel) renderDetailTree(findAnnotation(sel.type, sel.id));
+  else refreshLayerList();
 }
 
 // MAP EVENTS
@@ -1514,12 +1621,13 @@ function enterVertexEdit(regionId) {
         refreshRegionGeometry(region);
         updateMidpointPositions(region);
       });
-      handle.on('dragend', () => { scheduleSave(); });
+      handle.on('dragend', () => { renestAround(region); refreshTree(); scheduleSave(); });
       handle.on('click', (e) => {
         L.DomEvent.stopPropagation(e);
         if (ring.length <= 3) return;
         pushHistory();
         region.polygons[ringIdx].splice(ptIdx, 1);
+        renestAround(region);
         remountRegionLayer(region);
         enterVertexEdit(regionId);
         scheduleSave();
@@ -1634,6 +1742,7 @@ function applyBrush(latlng, forceNew = false) {
   if (!result?.length) return;
 
   region.polygons = result.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
+  strokeTouched.add(region.id);
   remountRegionLayer(region);
   if (isNew) selectAnnotation('region', region.id);
   scheduleSave();
@@ -1675,6 +1784,7 @@ function applyEraser(latlng) {
       state.annotations.regions = state.annotations.regions.filter(r2 => r2.id !== region.id);
       layers.regions[region.id]?.remove();
       delete layers.regions[region.id];
+      strokeDeleted.add(region.id);
       if (state.ui.selected?.id === region.id) clearSelection();
       else refreshLayerList();
       scheduleSave();
@@ -1682,9 +1792,28 @@ function applyEraser(latlng) {
     }
 
     region.polygons = result.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
+    strokeTouched.add(region.id);
     remountRegionLayer(region);
     scheduleSave();
   });
+}
+
+const strokeTouched = new Set(); // region ids reshaped during the current brush/eraser stroke
+const strokeDeleted = new Set(); // region ids erased away during the current stroke
+
+function endStroke() {
+  if (!brushPainting) return;
+  brushPainting   = false;
+  brushLastLatLng = null;
+  if (strokeDeleted.size) orphanChildrenOf([...strokeDeleted]);
+  for (const id of strokeTouched) {
+    const region = state.annotations.regions.find(r => r.id === id);
+    if (region) renestAround(region);
+  }
+  strokeTouched.clear();
+  strokeDeleted.clear();
+  refreshTree();
+  scheduleSave();
 }
 
 map.on('mousedown', (e) => {
@@ -1713,8 +1842,8 @@ map.on('mousemove', (e) => {
   if (tool === 'eraser') applyEraser(e.latlng);
 });
 
-map.on('mouseup',  () => { brushPainting = false; brushLastLatLng = null; });
-map.on('mouseout', () => { brushPainting = false; brushLastLatLng = null; });
+map.on('mouseup',  endStroke);
+map.on('mouseout', endStroke);
 
 // INIT
 
@@ -1738,6 +1867,7 @@ if (fromShare) {
 
 // guarantee at least one layer + a valid active layer (fresh maps land here too)
 ensureLayers(state.annotations);
+ensureNesting();
 state.ui.activeLayerId = state.annotations.layers[0].id;
 renderLayerStrip();
 

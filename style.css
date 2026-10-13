@@ -339,7 +339,7 @@ body {
 /* DETAIL PANEL */
 
 #detail-tree {
-  max-height: 160px;
+  max-height: 40%;
   overflow-y: auto;
   flex-shrink: 0;
   border-bottom: 1px solid var(--panel-border);
@@ -753,6 +753,79 @@ body {
 .item-hidden {
   opacity: 0.5;
   font-style: italic;
+}
+
+.item-row-parent {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.renest-actions {
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* NESTING TREE (breadcrumb + nested children) */
+
+.tree-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.tree-sep { color: var(--text-muted); }
+
+.tree-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.tree-link:hover { color: var(--accent); }
+
+.tree-children { padding-left: 12px; }
+
+.tree-leaf,
+.tree-node > summary {
+  padding: 5px 10px;
+  font-size: 13px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.tree-node > summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.tree-node > summary::-webkit-details-marker { display: none; }
+
+.tree-node > summary::before {
+  content: '▶';
+  font-size: 8px;
+  margin-right: 6px;
+  color: var(--text-muted);
+  display: inline-block;
+  transition: transform 0.15s;
+}
+
+.tree-node[open] > summary::before { transform: rotate(90deg); }
+
+.tree-leaf { padding-left: 24px; }
+
+.tree-pin .tree-link::before { content: '📍'; font-size: 11px; }
+
+.tree-count {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 /* BRUSH CONTROLS (hidden until brush/eraser active — toggled via .hidden class) */
