@@ -59,7 +59,7 @@ In Design Mode, use **Upload Image** to load a JPEG or PNG as the map background
 - **Add Region** tool: click to place polygon vertices; click the first vertex again (or double-click) to close the shape. `Esc` cancels.
 - **Flood Region** (magic wand): click a point on the image and the tool flood-fills the area by color similarity. Adjust **Tolerance** to control how broadly it fills.
 - **Edit Vertices**: with a region selected, activates vertex drag handles on the polygon.
-- **Brush**: drag to paint-expand the selected region (or start a new one).
+- **Brush**: drag to paint-expand the selected region (or start a new one). `Shift`+drag always starts a new region; `Esc` deselects so the next stroke starts fresh.
 - **Eraser**: drag to subtract area from any region underneath.
 
 ### Merging and Consolidating

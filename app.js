@@ -528,6 +528,7 @@ function setActiveTool(tool) {
   if (!isPaint) hideBrushCursor();
   map.getContainer().style.cursor = isPaint ? 'none' : (tool ? 'crosshair' : '');
   if (isPaint) map.dragging.disable(); else map.dragging.enable();
+  if (isPaint) map.boxZoom.disable();  else map.boxZoom.enable(); // shift+drag belongs to the brush
   if (tool === 'region') map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
 
   if (tool !== 'region') cancelRegionDraw();
@@ -1453,10 +1454,15 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key !== 'Escape') return;
+  // esc unwinds the innermost thing first; deselect only when nothing else was cancelled
+  const busy = draw.active || state.ui.mergeSource || vertexEdit.active || state.ui.activeTool === 'edit';
   if (draw.active)            cancelRegionDraw();
   if (state.ui.mergeSource)   cancelMerge();
   if (vertexEdit.active)      exitVertexEdit();
   if (state.ui.activeTool === 'edit') setActiveTool(null);
+  if (busy || !state.ui.selected || e.target.isContentEditable) return; // layer rename handles its own esc
+  if (typedFields.has(e.target)) { e.target.blur(); return; }       // first esc leaves a field you typed in
+  clearSelection();
 });
 
 // VERTEX EDIT
@@ -1586,7 +1592,8 @@ function hideBrushCursor() {
   if (brushCursorLayer) { brushCursorLayer.remove(); brushCursorLayer = null; }
 }
 
-function applyBrush(latlng) {
+// forceNew (shift+drag) starts a fresh region instead of extending the selection
+function applyBrush(latlng, forceNew = false) {
   if (typeof polygonClipping === 'undefined') return;
 
   const r          = screenToBrushRadius();
@@ -1595,7 +1602,7 @@ function applyBrush(latlng) {
 
   let region = null;
   let isNew  = false;
-  if (state.ui.selected?.type === 'region') {
+  if (!forceNew && state.ui.selected?.type === 'region') {
     region = state.annotations.regions.find(r2 => r2.id === state.ui.selected.id);
     if (region?.layerId !== state.ui.activeLayerId) region = null;
   }
@@ -1687,7 +1694,7 @@ map.on('mousedown', (e) => {
   brushPainting   = true;
   brushLastLatLng = e.latlng;
   pushHistory();
-  if (tool === 'brush')  applyBrush(e.latlng);
+  if (tool === 'brush')  applyBrush(e.latlng, e.originalEvent.shiftKey);
   if (tool === 'eraser') applyEraser(e.latlng);
 });
 
