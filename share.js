@@ -1,5 +1,7 @@
 import { state } from './state.js';
 import { sanitizeAnnotations } from './persistence.js';
+import { parseProject } from './project.js';
+import { mapParam } from './image.js';
 // SHARE LINKS — annotations packed into the URL hash
 //
 // v2: '#z' + base64url(deflate-raw(JSON)), coordinates rounded to 0.01px.
@@ -79,6 +81,21 @@ const shareLock        = document.getElementById('share-lock');
 const shareUrl         = document.getElementById('share-url');
 const shareCopy        = document.getElementById('share-copy');
 const shareNote        = document.getElementById('share-note');
+const fileSrc          = document.getElementById('share-file-src');
+const fileUrl          = document.getElementById('share-file-url');
+const fileCopy         = document.getElementById('share-file-copy');
+const fileEdit         = document.getElementById('share-file-edit');
+const fileNote         = document.getElementById('share-file-note');
+const mapBanner        = document.getElementById('map-banner');
+
+// links to this app carry only ?map= over from the current address (not ?gist=, ?project= or ?edit)
+function appUrl(params = {}) {
+  const q = new URLSearchParams();
+  if (mapParam) q.set('map', mapParam);
+  for (const [k, v] of Object.entries(params)) if (v != null) q.set(k, v);
+  const search = q.toString().replace(/%2F/gi, '/');
+  return `${location.origin}${location.pathname}${search ? '?' + search : ''}`;
+}
 
 // SHARE DIALOG
 
@@ -88,7 +105,7 @@ const LONG_LINK_CHARS = 8000;
 async function refreshShareUrl() {
   shareUrl.value = 'Building link…';
   const hash = await encodeShare(state.annotations, shareLock.checked);
-  shareUrl.value = `${location.origin}${location.pathname}${location.search}#${hash}`;
+  shareUrl.value = `${appUrl()}#${hash}`;
   const kb = (shareUrl.value.length / 1024).toFixed(1);
   shareNote.textContent = (shareUrl.value.length > LONG_LINK_CHARS
     ? `Long link (${kb} KB): some apps may cut it off. ` : `Link size ${kb} KB. `)
@@ -102,11 +119,105 @@ export async function readShareHash(hash) {
   return { doc: { title: '', image: null, annotations: sanitizeAnnotations(payload.annotations) }, lock: !!payload.lock };
 }
 
+// LINKS TO MAP FILES
+//
+// ?gist=user/id[/file]  a GitHub gist holding an exported .imap.json (latest revision; GitHub caches ~5 min)
+// ?project=url          any .imap.json the browser may fetch (same site, or a host that allows CORS)
+// Display-only unless &edit is present; either way nothing is saved unless the viewer keeps the map.
+
+const GIST_USER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const GIST_ID   = /^[0-9a-f]{20,40}$/i;
+const GIST_FILE = /^[\w.-]{1,100}$/;
+
+// "user/id" or "user/id/file" → the raw file URL, or null
+export function gistRawUrl(spec) {
+  const [user, id, file, ...rest] = String(spec).split('/');
+  if (rest.length || !GIST_USER.test(user ?? '') || !GIST_ID.test(id ?? '') || (file && !GIST_FILE.test(file))) return null;
+  return `https://gist.githubusercontent.com/${user}/${id}/raw${file ? '/' + file : ''}`;
+}
+
+// whatever the user pasted (a gist page, a raw gist link, or a plain URL) → link params, or null
+export function linkParamsFor(input) {
+  const text = input.trim();
+  if (!/^https?:\/\//i.test(text)) return null; // a full address: stray text must not become a relative path
+  let url;
+  try { url = new URL(text); } catch { return null; }
+  const parts = url.pathname.split('/').filter(Boolean);
+  if (url.hostname === 'gist.github.com' && parts.length >= 2) {
+    const spec = `${parts[0]}/${parts[1]}`;
+    return gistRawUrl(spec) ? { gist: spec } : null;
+  }
+  if (url.hostname === 'gist.githubusercontent.com' && parts.length >= 3 && parts[2] === 'raw') {
+    // a raw link may pin a revision (…/raw/<sha>/<file>): link to the latest instead, keeping the file name
+    const file = parts.length > 3 ? parts.at(-1) : null;
+    const spec = `${parts[0]}/${parts[1]}${file && !/^[0-9a-f]{40}$/.test(file) ? '/' + file : ''}`;
+    return gistRawUrl(spec) ? { gist: spec } : null;
+  }
+  return { project: url.origin === location.origin ? url.pathname.replace(/^\//, '') + url.search : url.href };
+}
+
+// the map file named in the address bar, as { url, edit } or null
+export function linkedFile() {
+  const q = new URLSearchParams(location.search);
+  const edit = q.has('edit');
+  if (q.has('gist')) {
+    const url = gistRawUrl(q.get('gist'));
+    return url ? { url, edit } : { error: 'the gist link is malformed', edit };
+  }
+  if (q.has('project')) return { url: q.get('project'), edit };
+  return null;
+}
+
+// fetch and parse a linked map file → { doc } or { error }
+export async function fetchLinkedFile(url) {
+  try {
+    const res = await fetch(url, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(res.status === 404 ? 'the file was not found (404)' : `the server answered ${res.status}`);
+    return { doc: await parseProject(await res.json()) };
+  } catch (err) {
+    const message = err instanceof SyntaxError ? 'it is not a map file (not JSON)'
+                  : err instanceof TypeError   ? 'it could not be fetched (offline, or the host blocks other sites)'
+                  : err.message;
+    return { error: message };
+  }
+}
+
+export function showBanner(message) {
+  if (!mapBanner) return;
+  mapBanner.textContent = message;
+  mapBanner.classList.toggle('hidden', !message);
+}
+
+function refreshFileLink() {
+  const params = fileSrc.value.trim() ? linkParamsFor(fileSrc.value) : null;
+  fileCopy.disabled = !params;
+  if (!params) {
+    fileUrl.value = '';
+    fileNote.textContent = fileSrc.value.trim()
+      ? 'Paste a gist address (gist.github.com/you/…) or a link to a .imap.json file.'
+      : 'Export the map, add the file to a secret gist at gist.github.com, then paste the gist\'s address here.';
+    return;
+  }
+  fileUrl.value = appUrl({ ...params, edit: fileEdit.checked ? '1' : null });
+  fileNote.textContent = (params.gist ? 'Opens the latest version of the gist (updates show within ~5 minutes). ' : '')
+    + (fileEdit.checked ? 'Viewers can edit, but nothing is saved unless they keep the map.' : 'Display-only for viewers.')
+    + (location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? ' This app is running locally, so the link only works on this computer.' : '');
+}
+
+fileSrc?.addEventListener('input', refreshFileLink);
+fileEdit?.addEventListener('change', refreshFileLink);
+fileCopy?.addEventListener('click', () => {
+  navigator.clipboard.writeText(fileUrl.value).then(() => {
+    fileCopy.textContent = 'Copied!';
+    setTimeout(() => { fileCopy.textContent = 'Copy'; }, 1500);
+  });
+});
+
 btnShare.addEventListener('click', (e) => {
   e.stopPropagation();
   const isOpen = !shareDialog.classList.contains('hidden');
   shareDialog.classList.toggle('hidden', isOpen);
-  if (!isOpen) refreshShareUrl();
+  if (!isOpen) { refreshShareUrl(); refreshFileLink(); }
 });
 
 shareLock.addEventListener('change', refreshShareUrl);

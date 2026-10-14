@@ -277,6 +277,7 @@ function ask(title, message, buttons) {
       btn.className   = b.danger ? 'btn-danger armed' : 'btn-secondary';
       btn.textContent = b.label;
       btn.addEventListener('click', () => { dialog.close(b.value); });
+      if (b.value === 'cancel') btn.autofocus = true; // Enter must not confirm a replace by accident
       row.appendChild(btn);
     }
     dialog.addEventListener('close', () => resolve(dialog.returnValue || 'cancel'), { once: true });

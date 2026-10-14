@@ -165,7 +165,20 @@ Format (version 1, plain JSON):
 
 ### Sharing
 
-Click **Share** (top-right) to generate a URL encoding the current annotations.
+Click **Share** (top-right). The dialog offers two kinds of link.
+
+**Link to a map file** (recommended; includes the image, any size):
+1. **Export** the map (left panel).
+2. Create a gist at [gist.github.com](https://gist.github.com) (a *secret* gist is fine: it's unlisted but viewable by anyone with the link) and drop the `.imap.json` file into it.
+3. Paste the gist's address into the Share dialog and copy the link it builds: `…/?gist=you/abc123`.
+
+- Viewers get the map display-only. Tick **Let viewers edit** to allow Design Mode (`&edit=1`); their changes aren't saved unless they choose to keep the map.
+- A gist link always opens the gist's latest version, so updating the gist updates the map for everyone (GitHub caches it for about 5 minutes). Pasting a raw link that pins a revision still links to the latest.
+- Any `.imap.json` the browser may fetch works too: `?project=<url>`, for a file on the same site or on a host that allows cross-site requests.
+- The link points at wherever this app is running, so it only works for others once the app is hosted (a `localhost` link works only on your computer; the dialog says so).
+- Opening a linked map never touches the viewer's own saved map. If the file can't be loaded, a message on the map says why.
+
+**Quick link** (annotations only, encoded in the URL itself):
 
 - **Lock Design Mode**: check this before copying the link to prevent the viewer from editing.
 - The map image is not included in the link. Recipients get the baseline map if the site serves one (the link keeps any `?map=`); otherwise they must upload it themselves.

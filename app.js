@@ -9,7 +9,7 @@
 import { navStack, state } from './state.js';
 import { pointInRing } from './utils.js';
 import { findAnnotation } from './nesting.js';
-import { readShareHash } from './share.js';
+import { fetchLinkedFile, linkedFile, readShareHash, showBanner } from './share.js';
 import { map } from './map.js';
 import { redo, undo } from './history.js';
 import { clearSelection, goUp, showLayer } from './selection.js';
@@ -185,11 +185,21 @@ document.addEventListener('keydown', (e) => {
 initWorker();
 if (typeof lucide !== 'undefined') lucide.createIcons();
 
-// a share link opens as a separate map that isn't saved unless it's kept; otherwise the saved map
+// a linked map file (?gist= / ?project=) or a share link opens as a separate map that isn't saved
+// unless it's kept; otherwise the saved map
+const linked   = linkedFile();
 const hashData = location.hash.slice(1);
-const shared   = hashData ? await readShareHash(hashData) : null;
-if (shared) await openDocument(shared.doc, { autosave: false, locked: shared.lock });
-else        await openSaved();
+if (linked) {
+  showBanner('Loading map…');
+  const { doc, error } = linked.url ? await fetchLinkedFile(linked.url) : { error: linked.error };
+  showBanner(error ? `Couldn't open the linked map: ${error}.` : '');
+  await openDocument(doc ?? { title: '', image: null, annotations: { layers: [], regions: [], pins: [] } },
+                     { autosave: false, locked: !linked.edit });
+} else {
+  const shared = hashData ? await readShareHash(hashData) : null;
+  if (shared) await openDocument(shared.doc, { autosave: false, locked: shared.lock });
+  else        await openSaved();
+}
 
 if (state.ui.shareLocked) btnMode.style.display = 'none';
 setMode('display');

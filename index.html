@@ -108,6 +108,18 @@
         <button id="btn-share" title="Get a share link">Share</button>
       </div>
       <div id="share-dialog" class="hidden">
+        <div class="share-section-title">Link to a map file</div>
+        <input id="share-file-src" type="text" placeholder="https://gist.github.com/you/abc123…" />
+        <div class="share-url-row">
+          <input id="share-file-url" type="text" readonly />
+          <button id="share-file-copy" disabled>Copy</button>
+        </div>
+        <label class="share-lock-label">
+          <input type="checkbox" id="share-file-edit" /> Let viewers edit
+        </label>
+        <p id="share-file-note" class="share-note"></p>
+
+        <div class="share-section-title">Quick link (annotations only, no image)</div>
         <label class="share-lock-label">
           <input type="checkbox" id="share-lock" /> Lock Design Mode for viewer
         </label>
@@ -118,6 +130,9 @@
         <p id="share-note" class="share-note"></p>
       </div>
     </div>
+
+    <!-- Messages about the map as a whole (loading / errors for linked maps) -->
+    <div id="map-banner" class="map-banner hidden"></div>
 
     <!-- Placeholder shown when no image is loaded -->
     <div id="map-placeholder">
