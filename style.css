@@ -893,6 +893,37 @@ body {
   font-style: italic;
 }
 
+.row-eye {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  opacity: 0.35;
+}
+
+.item-row:hover .row-eye,
+.view-hidden .row-eye { opacity: 1; }
+.row-eye:hover { color: var(--text); }
+
+.item-row-parent + .row-eye { margin-left: 4px; }
+
+.item-row.view-hidden .item-row-label,
+.item-row.view-hidden .color-wheel { opacity: 0.4; }
+
+.layer-chip-eye {
+  display: flex;
+  color: var(--text-muted);
+  padding: 0 1px;
+  border-radius: 3px;
+}
+
+.layer-chip-eye:hover { color: var(--text); background: #1a1a1a; }
+
+.layer-chip.view-hidden .layer-chip-name { opacity: 0.45; text-decoration: line-through; }
+
 .item-row-parent {
   margin-left: auto;
   font-size: 11px;

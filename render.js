@@ -4,8 +4,9 @@ import { layers, state } from './state.js';
 import { escapeHtml } from './utils.js';
 import { childrenInView, countInView, findAnnotation, parentInView } from './nesting.js';
 import { map } from './map.js';
-import { selectAnnotation } from './selection.js';
-import { renderDetailPanel } from './panel.js';
+import { clearSelection, selectAnnotation } from './selection.js';
+import { refreshLayerList, renderDetailPanel } from './panel.js';
+import { renderLayerStrip } from './layerstrip.js';
 import { enterVertexEdit, performMerge } from './shapes.js';
 
 export function applyZOrder() {
@@ -176,17 +177,58 @@ export function remountRegionLayer(region) {
   mountRegionLayer(region);
 }
 
+// Display Mode honours each item's "hidden" flag; Design Mode honours the eye toggles instead
+const offMap = (item) => state.mode === 'display' ? item.hidden : hiddenInView(item);
+
 export function applyLayerVisibility() {
-  const hide = state.mode === 'display';
-  state.annotations.pins.forEach(pin => {
-    const m = layers.pins[pin.id];
-    if (!m) return;
-    if (hide && pin.hidden) m.remove(); else m.addTo(map);
-  });
-  state.annotations.regions.forEach(region => {
-    const g = layers.regions[region.id];
-    if (!g) return;
-    if (hide && region.hidden) g.remove(); else g.addTo(map);
-  });
+  let readded = false;
+  const show = (leafletLayer, item) => {
+    if (offMap(item)) { leafletLayer.remove(); return; }
+    if (!map.hasLayer(leafletLayer)) { leafletLayer.addTo(map); readded = true; }
+  };
+  state.annotations.pins.forEach(pin => { if (layers.pins[pin.id]) show(layers.pins[pin.id], pin); });
+  state.annotations.regions.forEach(region => { if (layers.regions[region.id]) show(layers.regions[region.id], region); });
+  if (readded) applyZOrder(); // a re-added region lands on top of everything
   applyInteractivity();
+}
+
+// EYE TOGGLES — declutter the view while editing. View-only: never saved, not in undo history,
+// and ignored in Display Mode
+
+export function hiddenInView(item) {
+  return state.ui.viewHidden.has(item.id) || state.ui.viewHiddenLayers.has(item.layerId);
+}
+
+export function toggleItemView(id) {
+  const set = state.ui.viewHidden;
+  if (set.has(id)) set.delete(id); else set.add(id);
+  afterViewChange();
+}
+
+export function toggleLayerView(layerId) {
+  const set = state.ui.viewHiddenLayers;
+  if (set.has(layerId)) set.delete(layerId); else set.add(layerId);
+  afterViewChange();
+}
+
+// an item you select or create becomes visible again (with its layer)
+export function revealInView(item) {
+  if (!item || !hiddenInView(item)) return false;
+  state.ui.viewHidden.delete(item.id);
+  state.ui.viewHiddenLayers.delete(item.layerId);
+  afterViewChange();
+  return true;
+}
+
+export function clearViewHiding() {
+  state.ui.viewHidden.clear();
+  state.ui.viewHiddenLayers.clear();
+}
+
+function afterViewChange() {
+  const sel = state.ui.selected;
+  if (sel && state.mode === 'design' && hiddenInView(findAnnotation(sel.type, sel.id) ?? {})) clearSelection();
+  applyLayerVisibility();
+  renderLayerStrip();
+  refreshLayerList();
 }

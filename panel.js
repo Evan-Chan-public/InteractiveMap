@@ -1,14 +1,14 @@
 // PANEL — the right panel: layer list, details view, editor, nesting tree, merge preview
 
 import { navStack, state } from './state.js';
-import { escapeHtml } from './utils.js';
+import { escapeHtml, ICON_EYE, ICON_EYE_OFF } from './utils.js';
 import { scheduleSave } from './persistence.js';
 import { ancestorsOf, autoParent, childrenInView, countInView, findAnnotation, findItem,
          parentInView, renest, renestAll, visibleInMode, wouldCycle } from './nesting.js';
 import { map } from './map.js';
 import { pushHistory } from './history.js';
 import { clearSelection, goBack, navigateAnnotation, panToItem, selectAnnotation } from './selection.js';
-import { applyLayerVisibility, updatePinLayer, updateRegionLayer } from './render.js';
+import { applyLayerVisibility, hiddenInView, toggleItemView, updatePinLayer, updateRegionLayer } from './render.js';
 import { moveToLayer } from './layerstrip.js';
 import { isDeleteArmed, requestDelete } from './create.js';
 import { cancelMerge, consolidateRegion, startMerge } from './shapes.js';
@@ -137,10 +137,11 @@ function renderLayerList() {
   const pins    = state.annotations.pins.filter(p => p.layerId === layer?.id);
 
   const row = (type, a) => `
-    <div class="pin-list-item item-row${a.hidden ? ' item-hidden' : ''}" data-type="${type}" data-id="${escapeHtml(a.id)}">
+    <div class="pin-list-item item-row${a.hidden ? ' item-hidden' : ''}${hiddenInView(a) ? ' view-hidden' : ''}" data-type="${type}" data-id="${escapeHtml(a.id)}">
       ${type === 'region' ? `<span class="color-wheel" style="background:${escapeHtml(a.color || '#4a9eff')}"></span>` : ''}
       <span class="item-row-label">${escapeHtml(a.label || (type === 'region' ? 'Untitled region' : 'Untitled pin'))}</span>
       ${a.parentId ? `<span class="item-row-parent">in ${escapeHtml(findItem(a.parentId)?.label || 'Untitled')}</span>` : ''}
+      <button class="row-eye" title="${hiddenInView(a) ? 'Show' : 'Hide while editing (not saved; viewers still see it)'}">${hiddenInView(a) ? ICON_EYE_OFF : ICON_EYE}</button>
     </div>`;
   const section = (title, type, items) => items.length ? `
     <details class="pin-list" open>
@@ -172,8 +173,9 @@ function renderLayerList() {
   bindRenest('renest-all', null);
 
   detailContent.querySelectorAll('.item-row').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
       const { type, id } = el.dataset;
+      if (e.target.closest('.row-eye')) { toggleItemView(id); return; }
       selectAnnotation(type, id);
       panToItem(type, id);
     });

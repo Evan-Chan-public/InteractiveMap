@@ -1,12 +1,12 @@
 // LAYER STRIP — the layer chips (top-left): switch, add, rename, reorder, delete; moving items between layers
 
 import { layers, state } from './state.js';
-import { generateId } from './utils.js';
+import { generateId, ICON_EYE, ICON_EYE_OFF } from './utils.js';
 import { scheduleSave } from './persistence.js';
 import { findAnnotation, orphanChildrenOf, renestAround } from './nesting.js';
 import { pushHistory } from './history.js';
 import { clearSelection, followToLayer } from './selection.js';
-import { applyInteractivity, applyZOrder, remountRegionLayer, unmountRegion } from './render.js';
+import { applyInteractivity, applyZOrder, remountRegionLayer, toggleLayerView, unmountRegion } from './render.js';
 import { refreshLayerList } from './panel.js';
 import { cancelMerge } from './shapes.js';
 
@@ -34,6 +34,16 @@ export function renderLayerStrip() {
     name.textContent = layer.name;
     chip.appendChild(name);
 
+    const viewHidden = editable && state.ui.viewHiddenLayers.has(layer.id);
+    chip.classList.toggle('view-hidden', viewHidden);
+    if (editable) {
+      const eye = document.createElement('span');
+      eye.className = 'layer-chip-eye';
+      eye.innerHTML = viewHidden ? ICON_EYE_OFF : ICON_EYE;
+      eye.title = viewHidden ? 'Show this layer' : 'Hide this layer while editing (not saved; viewers still see it)';
+      chip.appendChild(eye);
+    }
+
     if (editable && !onlyOne) {
       const close = document.createElement('span');
       close.className = 'layer-chip-close';
@@ -43,6 +53,7 @@ export function renderLayerStrip() {
     }
 
     chip.addEventListener('click', (e) => {
+      if (e.target.closest('.layer-chip-eye')) { toggleLayerView(layer.id); return; }
       if (e.target === name && name.isContentEditable) return;
       if (e.target.classList.contains('layer-chip-close')) {
         handleLayerDelete(layer.id, e.target);

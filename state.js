@@ -21,6 +21,8 @@ export const state = {
     activeLayerId: null, // currently selected layer; others render dimmed
     shareLocked:   false, // opened from a locked share link: design mode is off
     autosave:      true,  // false while viewing a map opened from a link, until it's kept
+    viewHidden:       new Set(), // item ids hidden with the eye toggle (Design Mode only; never saved)
+    viewHiddenLayers: new Set(), // layer ids hidden with the eye toggle
   },
 };
 

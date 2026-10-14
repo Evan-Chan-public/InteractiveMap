@@ -3,14 +3,16 @@
 import { layers, navStack, state } from './state.js';
 import { findAnnotation, parentInView } from './nesting.js';
 import { map } from './map.js';
-import { applyInteractivity } from './render.js';
+import { applyInteractivity, revealInView } from './render.js';
 import { focusLabelOnce, renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 
 // switch to an item's layer without dropping selection (panel / back navigation)
 export function followToLayer(type, id) {
   const item = findAnnotation(type, id);
-  if (item) showLayer(item.layerId);
+  if (!item) return;
+  if (state.mode === 'design') revealInView(item);
+  showLayer(item.layerId);
 }
 
 // restyles even when the layer is unchanged: the display drill-down depends on the selection

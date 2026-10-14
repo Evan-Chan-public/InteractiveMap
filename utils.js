@@ -45,6 +45,11 @@ export function latlngDist(a, b) {
   return Math.sqrt(dlat * dlat + dlng * dlng);
 }
 
+// INLINE ICONS (lucide eye / eye-off)
+const svg = (body) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+export const ICON_EYE     = svg('<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>');
+export const ICON_EYE_OFF = svg('<path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/>');
+
 // ring [{lat,lng}] → polygon-clipping Polygon [[[x,y],...]]
 export const ringToGeom = (ring) => [ring.map(p => [p.lng, p.lat])];
 

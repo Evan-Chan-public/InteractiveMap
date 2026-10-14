@@ -10,7 +10,7 @@ import { state, navStack } from './state.js';
 import { clearSaved, ensureLayers, loadSaved, sanitizeAnnotations, saveNow, scheduleSave } from './persistence.js';
 import { ensureNesting } from './nesting.js';
 import { resetHistory } from './history.js';
-import { mountAll, unmountAll } from './render.js';
+import { clearViewHiding, mountAll, unmountAll } from './render.js';
 import { renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 import { cancelRegionDraw, disarmDelete, seedColors } from './create.js';
@@ -107,6 +107,7 @@ export async function openDocument(doc, { autosave = true, locked = false, useMa
   cancelWand();    // a fill traced from the old image must not land on the new map
   disarmDelete();
   unmountAll();
+  clearViewHiding();
 
   state.title             = doc.title || '';
   state.docImage          = doc.image ?? null;

@@ -76,7 +76,7 @@ Toggle with the **Design Mode** button (top-right). Exposes all editing tools an
 ## Features
 
 ### Upload a Map
-In Design Mode, use **Upload Image** (or paste) to load a JPEG or PNG as the map background. The image is stored in memory only — annotations are saved separately to `localStorage`.
+In Design Mode, use **Upload Image** (or paste, or drop an image on the map) to load a PNG, JPEG, GIF or WebP as the map background. It becomes the map's own image: autosaved with the map and embedded when you export it.
 
 **Baseline map:** on startup the app loads, in order of preference:
 1. the file named by `?map=other.png` in the URL, if given;
@@ -112,7 +112,8 @@ Each region has an assigned color, visible as a swatch in the region list and as
 All annotations have a **label** and a **description** field. Descriptions support Markdown (rendered in display mode).
 
 ### Hiding
-Individual annotations can be toggled hidden. Hidden items are invisible in Display Mode.
+- **Hide in display mode** (editor checkbox) hides an item from viewers. It's saved with the map.
+- **Eye toggles** declutter your own view while editing: an eye on each row of the right panel's list hides that item, and an eye on each layer chip hides the whole layer. They only apply in Design Mode, aren't saved, aren't part of undo, and never change what viewers see. Selecting a hidden item (from the list or the tree) or creating something on a hidden layer shows it again; the eraser leaves hidden regions alone. Opening another map shows everything again.
 
 ### Deleting
 Select an item in Design Mode and press `Backspace` / `Delete`, or click **Delete** in the editor. With **Confirm deletes** on (left panel, on by default, remembered per browser), the first press arms the button and a second press or click within 3 seconds deletes; `Esc` cancels. Keys typed into a text field never delete. Newly created items open with their label focused for naming; selecting an existing item doesn't, so `Backspace` goes to the item.
@@ -194,4 +195,10 @@ Click **Share** (top-right). The dialog offers two kinds of link.
 
 The current map autosaves to the browser's IndexedDB after every edit: annotations, title and an uploaded image, so everything (image included) comes back on the next visit. Baseline maps aren't stored, since they're loaded from their file each time. Where IndexedDB isn't available, annotations fall back to `localStorage` as before; maps saved there by older versions are moved over automatically.
 
-Saved data lives in this browser only. Use **Export** to keep a copy or move a map elsewhere. If a saved map's image can't be loaded, the placeholder offers to discard the saved map.
+Saved data lives in this browser only. Use **Export** to keep a copy or move a map elsewhere.
+
+- The map's own image is kept even when something else is on screen: opening with `?map=…`, or a fallback to the baseline because the image couldn't load, never replaces the saved image.
+- The image and the annotations are written separately, so if the image can't be stored (e.g. storage is full) the annotations still save, and the left panel says the image wasn't saved until it is.
+- A saved map that can't be read is left untouched: the session opens empty and doesn't save until you import a map.
+- If no image can be shown at all, the placeholder offers to discard the saved map (after confirming).
+- Several tabs on the same map: the last one to save wins.

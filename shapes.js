@@ -7,7 +7,7 @@ import { findAnnotation, orphanChildrenOf, renestAround } from './nesting.js';
 import { map } from './map.js';
 import { pushHistory } from './history.js';
 import { clearSelection, selectAnnotation, selectNew } from './selection.js';
-import { remountRegionLayer, unmountRegion } from './render.js';
+import { hiddenInView, remountRegionLayer, unmountRegion } from './render.js';
 import { refreshLayerList, refreshTree, renderDetailPanel } from './panel.js';
 import { newRegion } from './create.js';
 import { setWandStatus } from './wand.js';
@@ -318,6 +318,7 @@ function applyEraser(latlng) {
   state.annotations.regions.forEach(region => {
     if (!region.polygons.length) return;
     if (region.layerId !== state.ui.activeLayerId) return; // eraser is locked to active layer
+    if (hiddenInView(region)) return;                      // …and to what you can see
 
     const group = layers.regions[region.id];
     if (group) {
