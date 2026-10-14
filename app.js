@@ -188,7 +188,7 @@ function buildShareUrl(lock) {
   const payload = { v: 1, lock, annotations: state.annotations };
   const bytes   = new TextEncoder().encode(JSON.stringify(payload));
   const hash    = btoa(String.fromCharCode(...bytes));
-  return `${location.origin}${location.pathname}#${hash}`;
+  return `${location.origin}${location.pathname}${location.search}#${hash}`;
 }
 
 function loadShareHash(hash) {
@@ -339,25 +339,32 @@ function findAnnotation(type, id) {
   return list.find(a => a.id === id);
 }
 
+// layer chip: design keeps a selection that's on the layer; display always leaves the drill-down
 function setActiveLayer(id) {
+  const sel = state.ui.selected;
+  if (sel && (state.mode === 'display' || findAnnotation(sel.type, sel.id)?.layerId !== id)) clearSelection();
   if (state.ui.activeLayerId === id) return;
   state.ui.activeLayerId = id;
   if (state.ui.mergeSource) cancelMerge();
-  const sel = state.ui.selected;
-  if (sel && findAnnotation(sel.type, sel.id)?.layerId !== id) clearSelection();
   renderLayerStrip();
-  applyDimming();
+  applyInteractivity();
   refreshLayerList();
 }
 
 // switch to an item's layer without dropping selection (panel / back navigation)
 function followToLayer(type, id) {
   const item = findAnnotation(type, id);
-  if (!item || item.layerId === state.ui.activeLayerId) return;
-  state.ui.activeLayerId = item.layerId;
-  if (state.ui.mergeSource) state.ui.mergeSource = null;
-  renderLayerStrip();
-  applyDimming();
+  if (item) showLayer(item.layerId);
+}
+
+// restyles even when the layer is unchanged: the display drill-down depends on the selection
+function showLayer(layerId) {
+  if (layerId !== state.ui.activeLayerId) {
+    state.ui.activeLayerId = layerId;
+    if (state.ui.mergeSource) state.ui.mergeSource = null;
+    renderLayerStrip();
+  }
+  applyInteractivity();
 }
 
 function moveToLayer(type, item, layerId) {
@@ -376,7 +383,7 @@ function addLayer() {
   state.annotations.layers.push(layer);
   state.ui.activeLayerId = layer.id;
   renderLayerStrip();
-  applyDimming();
+  applyInteractivity();
   refreshLayerList();
   scheduleSave();
 }
@@ -406,8 +413,7 @@ function deleteLayer(id) {
   const removedIds = state.annotations.regions.filter(r => r.layerId === id).map(r => r.id);
   state.annotations.regions = state.annotations.regions.filter(r => {
     if (r.layerId !== id) return true;
-    layers.regions[r.id]?.remove();
-    delete layers.regions[r.id];
+    unmountRegion(r.id);
     return false;
   });
   state.annotations.pins = state.annotations.pins.filter(p => {
@@ -428,7 +434,7 @@ function deleteLayer(id) {
   if (state.ui.selected) clearSelection();
 
   renderLayerStrip();
-  applyDimming();
+  applyInteractivity();
   refreshLayerList();
   scheduleSave();
 }
@@ -465,23 +471,54 @@ function startRenameLayer(id, nameEl) {
   nameEl.addEventListener('keydown', onKey);
 }
 
-function applyDimming() {
-  const activeId = state.ui.activeLayerId;
-  state.annotations.regions.forEach(region => {
-    const group = layers.regions[region.id];
-    if (!group) return;
-    const dim = region.layerId !== activeId;
-    group.eachLayer(l => {
-      const el = l.getElement();
-      if (el) el.classList.toggle('layer-dim', dim);
-    });
-  });
-  state.annotations.pins.forEach(pin => {
-    const marker = layers.pins[pin.id];
-    if (!marker) return;
-    const el = marker.getElement();
-    if (el) el.classList.toggle('layer-dim', pin.layerId !== activeId);
-  });
+// INTERACTIVITY — what's clickable, faded, or framing the drill-down
+//
+// design: the active layer. display: the children of the region drilled into (on any layer);
+// with nothing drilled into, the active layer. layer order only decides what draws on top.
+
+// display mode's drill-down region: the selection if it has children, else the selection's parent
+function drillFocus() {
+  const sel = state.ui.selected;
+  if (state.mode !== 'display' || !sel) return null;
+  const item = findAnnotation(sel.type, sel.id);
+  if (!item) return null;
+  if (sel.type === 'region' && countInView(childrenInView(item.id))) return item;
+  return parentInView(item);
+}
+
+// computed once per pass: the drill-down's children are collected up front
+function interactivity() {
+  const focus = drillFocus();
+  if (!focus) return { focus, isLive: (it) => it.layerId === state.ui.activeLayerId };
+  const { regions, pins } = childrenInView(focus.id);
+  const live = new Set([...regions, ...pins].map(it => it.id));
+  return { focus, isLive: (it) => live.has(it.id) };
+}
+
+function isLive(item) {
+  return interactivity().isLive(item);
+}
+
+function itemElements(type, id) {
+  if (type === 'pin') return [layers.pins[id]?.getElement()];
+  const els = [];
+  layers.regions[id]?.eachLayer(l => els.push(l.getElement()));
+  return els;
+}
+
+function styleItem(type, item, ix) {
+  const frame = ix.focus?.id === item.id;
+  const dim   = !frame && !ix.isLive(item);
+  for (const el of itemElements(type, item.id)) {
+    el?.classList.toggle('layer-dim', dim);
+    el?.classList.toggle('drill-frame', frame);
+  }
+}
+
+function applyInteractivity() {
+  const ix = interactivity();
+  state.annotations.regions.forEach(r => styleItem('region', r, ix));
+  state.annotations.pins.forEach(p => styleItem('pin', p, ix));
 }
 
 btnLayerAdd.addEventListener('click', addLayer);
@@ -499,6 +536,11 @@ function setMode(mode) {
     btnMode.textContent = 'Switch to Design Mode';
     setActiveTool(null);
     cancelRegionDraw();
+  }
+  const sel = state.ui.selected;
+  if (sel && mode === 'display' && findAnnotation(sel.type, sel.id)?.hidden) { // can't stay selected once hidden
+    navStack.length = 0;
+    state.ui.selected = null;
   }
   applyLayerVisibility();
   renderLayerStrip();
@@ -568,12 +610,21 @@ document.addEventListener('paste', (e) => {
 });
 
 function loadImageFile(file) {
-  const url = URL.createObjectURL(file);
+  loadImageUrl(URL.createObjectURL(file));
+}
+
+// baseline map, loaded at startup unless an image is already up. ?map=other.png picks another file
+const BASEMAP_URL = new URLSearchParams(location.search).get('map') || 'basemap.png';
+
+// ifEmpty: a slow baseline must not replace an image uploaded while it was loading
+function loadImageUrl(url, { ifEmpty = false } = {}) {
   const img = new Image();
   img.onload = () => {
+    if (ifEmpty && state.image) return;
     sourceImage = img;
     applyImage(url, img.naturalWidth, img.naturalHeight);
   };
+  img.onerror = () => { if (!ifEmpty) console.warn('Could not load map image:', url); };
   img.src = url;
 }
 
@@ -586,9 +637,7 @@ function applyImage(url, width, height) {
   mapPlaceholder.classList.add('hidden');
 
   if (flags.restoredAwaitingImage) {
-    state.annotations.pins.forEach(mountPinLayer);
-    state.annotations.regions.forEach(mountRegionLayer);
-    applyZOrder();
+    mountAll();
     flags.restoredAwaitingImage = false;
   }
   renderDetailPanel();
@@ -613,17 +662,16 @@ function addPin(latlng) {
   scheduleSave();
 }
 
-function mountPinLayer(pin) {
+function mountPinLayer(pin, single = true) {
   const marker = L.marker([pin.latlng.lat, pin.latlng.lng]).addTo(map);
   marker.bindTooltip(pin.label || 'Pin', { direction: 'top', offset: [0, -28] });
   marker.on('click', (e) => {
+    if (!isLive(pin)) return;
     L.DomEvent.stopPropagation(e);
     selectAnnotation('pin', pin.id);
   });
   layers.pins[pin.id] = marker;
-  if (pin.layerId !== state.ui.activeLayerId) {
-    marker.getElement()?.classList.add('layer-dim');
-  }
+  if (single) styleItem('pin', pin, interactivity());
 }
 
 function updatePinLayer(pin) {
@@ -769,7 +817,7 @@ function cancelRegionDraw() {
   if (draw.polyline) { draw.polyline.remove(); draw.polyline = null; }
 }
 
-function mountRegionLayer(region) {
+function mountRegionLayer(region, single = true) {
   const group = L.featureGroup().addTo(map);
 
   for (const ring of region.polygons) {
@@ -784,9 +832,9 @@ function mountRegionLayer(region) {
   }
 
   group.on('click', (e) => {
-    // creation tools and other layers pass the click through to the map
+    // creation tools and faded items pass the click through to the map
     if (['pin', 'region', 'wand'].includes(state.ui.activeTool)) return;
-    if (region.layerId !== state.ui.activeLayerId) return;
+    if (!isLive(region)) return;
     L.DomEvent.stopPropagation(e);
     if (state.ui.mergeSource && state.ui.mergeSource !== region.id) {
       performMerge(state.ui.mergeSource, region.id);
@@ -811,10 +859,22 @@ function mountRegionLayer(region) {
   });
 
   layers.regions[region.id] = group;
-  if (region.layerId !== state.ui.activeLayerId) {
-    group.eachLayer(l => l.getElement()?.classList.add('layer-dim'));
-  }
+  if (!single) return;
+  styleItem('region', region, interactivity());
   restackAbove(region);
+}
+
+// bulk mount (image load, undo/redo, locked share): restack and restyle once, not per item
+function mountAll() {
+  state.annotations.pins.forEach(p => mountPinLayer(p, false));
+  state.annotations.regions.forEach(r => mountRegionLayer(r, false));
+  applyLayerVisibility();
+  applyZOrder();
+}
+
+function unmountRegion(id) {
+  layers.regions[id]?.remove();
+  delete layers.regions[id];
 }
 
 function updateRegionLayer(region) {
@@ -827,8 +887,7 @@ function updateRegionLayer(region) {
 }
 
 function remountRegionLayer(region) {
-  layers.regions[region.id]?.remove();
-  delete layers.regions[region.id];
+  unmountRegion(region.id);
   mountRegionLayer(region);
 }
 
@@ -844,6 +903,7 @@ function applyLayerVisibility() {
     if (!g) return;
     if (hide && region.hidden) g.remove(); else g.addTo(map);
   });
+  applyInteractivity();
 }
 
 // MERGE
@@ -917,13 +977,10 @@ function performMerge(targetId, sourceId) {
   target.polygons = merged.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
 
   state.annotations.regions = state.annotations.regions.filter(r => r.id !== sourceId);
-  layers.regions[sourceId]?.remove();
-  delete layers.regions[sourceId];
-  layers.regions[targetId]?.remove();
-  delete layers.regions[targetId];
+  unmountRegion(sourceId);
   orphanChildrenOf([sourceId]);
   renestAround(target);
-  mountRegionLayer(target);
+  remountRegionLayer(target);
 
   state.ui.mergeSource = targetId;
   state.ui.mergeHover  = null;
@@ -959,9 +1016,7 @@ function consolidateRegion(regionId) {
 
   region.polygons = result.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
   renestAround(region);
-  layers.regions[regionId]?.remove();
-  delete layers.regions[regionId];
-  mountRegionLayer(region);
+  remountRegionLayer(region);
   selectAnnotation('region', regionId);
   scheduleSave();
 }
@@ -1055,8 +1110,7 @@ function deleteAnnotation(type, id) {
     delete layers.pins[id];
   } else if (type === 'region') {
     state.annotations.regions = state.annotations.regions.filter(r => r.id !== id);
-    layers.regions[id]?.remove();
-    delete layers.regions[id];
+    unmountRegion(id);
     orphanChildrenOf([id]);
   }
   clearSelection();
@@ -1107,10 +1161,7 @@ function restoreSnapshot(json) {
   if (!state.annotations.layers.some(l => l.id === state.ui.activeLayerId)) {
     state.ui.activeLayerId = state.annotations.layers[0]?.id ?? null;
   }
-  state.annotations.pins.forEach(mountPinLayer);
-  state.annotations.regions.forEach(mountRegionLayer);
-  applyLayerVisibility();
-  applyZOrder();
+  mountAll();
   renderLayerStrip();
   clearSelection();
   restoredSnap = JSON.stringify(state.annotations);
@@ -1119,22 +1170,23 @@ function restoreSnapshot(json) {
 
 // SELECTION / NAVIGATION
 
+// selection is set before following so the restyle sees it
 function selectAnnotation(type, id) {
   navStack.length = 0;
-  followToLayer(type, id);
   state.ui.selected = { type, id };
+  followToLayer(type, id);
   renderDetailPanel();
 }
 
 function navigateAnnotation(type, id) {
   if (state.ui.selected) navStack.push({ ...state.ui.selected });
-  followToLayer(type, id);
   state.ui.selected = { type, id };
+  followToLayer(type, id);
   renderDetailPanel();
 }
 
 function goBack() {
-  if (!navStack.length) { clearSelection(); return; }
+  if (!navStack.length) { if (state.mode === 'display') goUp(); else clearSelection(); return; }
   state.ui.selected = navStack.pop();
   followToLayer(state.ui.selected.type, state.ui.selected.id);
   renderDetailPanel();
@@ -1143,7 +1195,16 @@ function goBack() {
 function clearSelection() {
   navStack.length = 0;
   state.ui.selected = null;
+  applyInteractivity();
   renderDetailPanel();
+}
+
+// display mode: climb one level of the tree; above the root, browse the root's layer
+function goUp() {
+  const sel    = state.ui.selected;
+  const parent = sel && parentInView(findAnnotation(sel.type, sel.id));
+  if (parent) selectAnnotation('region', parent.id);
+  else clearSelection();
 }
 
 // DETAIL PANEL
@@ -1266,6 +1327,11 @@ function renderMergePreview(source, target) {
 }
 
 function backButtonHtml() {
+  if (!navStack.length && state.mode === 'display') {
+    const sel    = state.ui.selected;
+    const parent = sel && parentInView(findAnnotation(sel.type, sel.id));
+    return parent ? `<button id="nav-back" class="btn-back">← ${escapeHtml(parent.label || 'Untitled')}</button>` : '';
+  }
   if (!navStack.length) {
     if (!showsLayerList()) return '';
     const layer = state.annotations.layers.find(l => l.id === state.ui.activeLayerId);
@@ -1325,7 +1391,7 @@ function renderDetailEditor(annotation, type) {
     const autoLabel = auto ? escapeHtml(findItem(auto)?.label || 'Untitled') : 'top level';
     const current   = annotation.parentManual ? (annotation.parentId ?? '__none') : '';
     const groups    = state.annotations.layers
-      .filter(l => l.id !== annotation.layerId)
+      .filter(l => type === 'pin' || l.id !== annotation.layerId) // pins may sit in a same-layer region
       .map(l => {
         const opts = state.annotations.regions
           .filter(r => r.layerId === l.id && !wouldCycle(annotation.id, r.id))
@@ -1447,7 +1513,31 @@ function renderDetailEditor(annotation, type) {
 
 // NESTING TREE (breadcrumb + nested children above the details)
 
-const visibleInMode = (it) => state.mode !== 'display' || !it.hidden;
+function visibleInMode(it) {
+  return state.mode !== 'display' || !it.hidden;
+}
+
+// children as the current mode shows them: a hidden child is skipped and its children take its place
+function childrenInView(id, seen = new Set([id])) {
+  const { regions, pins } = childrenOf(id);
+  const out = { regions: [], pins: pins.filter(visibleInMode) };
+  for (const r of regions) {
+    if (visibleInMode(r)) { out.regions.push(r); continue; }
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    const sub = childrenInView(r.id, seen);
+    out.regions.push(...sub.regions);
+    out.pins.push(...sub.pins);
+  }
+  return out;
+}
+
+const countInView = ({ regions, pins }) => regions.length + pins.length;
+
+// nearest ancestor the current mode shows
+function parentInView(item) {
+  return item ? ancestorsOf(item).filter(visibleInMode).at(-1) ?? null : null;
+}
 
 function treeLinkHtml(type, item) {
   const dot = type === 'region'
@@ -1456,23 +1546,19 @@ function treeLinkHtml(type, item) {
   return `<span class="tree-link" data-type="${type}" data-id="${item.id}">${dot}${escapeHtml(item.label || fallback)}</span>`;
 }
 
-function childCount(id) {
-  const { regions, pins } = childrenOf(id);
-  return regions.filter(visibleInMode).length + pins.filter(visibleInMode).length;
-}
-
 // regions expand in place (<details>) when they have children of their own
-function childNodesHtml(id, seen = new Set([id])) {
-  const { regions, pins } = childrenOf(id);
-  const regionHtml = regions.filter(visibleInMode).map(r => {
-    if (seen.has(r.id) || !childCount(r.id)) return `<div class="tree-leaf">${treeLinkHtml('region', r)}</div>`;
+function childNodesHtml(kids, seen) {
+  const regionHtml = kids.regions.map(r => {
+    const sub   = childrenInView(r.id);
+    const count = seen.has(r.id) ? 0 : countInView(sub);
+    if (!count) return `<div class="tree-leaf">${treeLinkHtml('region', r)}</div>`;
     return `
       <details class="tree-node">
-        <summary>${treeLinkHtml('region', r)} <span class="tree-count">${childCount(r.id)}</span></summary>
-        <div class="tree-children">${childNodesHtml(r.id, new Set([...seen, r.id]))}</div>
+        <summary>${treeLinkHtml('region', r)} <span class="tree-count">${count}</span></summary>
+        <div class="tree-children">${childNodesHtml(sub, new Set([...seen, r.id]))}</div>
       </details>`;
   }).join('');
-  const pinHtml = pins.filter(visibleInMode)
+  const pinHtml = kids.pins
     .map(p => `<div class="tree-leaf tree-pin">${treeLinkHtml('pin', p)}</div>`).join('');
   return regionHtml + pinHtml;
 }
@@ -1482,11 +1568,12 @@ function renderTreeHtml(item) {
   const crumbHtml = crumbs.length
     ? `<div class="tree-crumbs">${crumbs.map(a => treeLinkHtml('region', a)).join('<span class="tree-sep">›</span>')}</div>`
     : '';
-  const count = item.polygons ? childCount(item.id) : 0;
+  const kids  = item.polygons ? childrenInView(item.id) : { regions: [], pins: [] };
+  const count = countInView(kids);
   const kidsHtml = count ? `
     <details class="pin-list" open>
       <summary class="pin-list-summary">Contains (${count})</summary>
-      <div class="tree-children">${childNodesHtml(item.id)}</div>
+      <div class="tree-children">${childNodesHtml(kids, new Set([item.id]))}</div>
     </details>` : '';
   return crumbHtml + kidsHtml;
 }
@@ -1569,7 +1656,7 @@ document.addEventListener('keydown', (e) => {
   if (state.ui.activeTool === 'edit') setActiveTool(null);
   if (busy || !state.ui.selected || e.target.isContentEditable) return; // layer rename handles its own esc
   if (typedFields.has(e.target)) { e.target.blur(); return; }       // first esc leaves a field you typed in
-  clearSelection();
+  if (state.mode === 'display') goUp(); else clearSelection();
 });
 
 // VERTEX EDIT
@@ -1782,8 +1869,7 @@ function applyEraser(latlng) {
 
     if (!result?.length) {
       state.annotations.regions = state.annotations.regions.filter(r2 => r2.id !== region.id);
-      layers.regions[region.id]?.remove();
-      delete layers.regions[region.id];
+      unmountRegion(region.id);
       strokeDeleted.add(region.id);
       if (state.ui.selected?.id === region.id) clearSelection();
       else refreshLayerList();
@@ -1872,11 +1958,8 @@ state.ui.activeLayerId = state.annotations.layers[0].id;
 renderLayerStrip();
 
 // locked share with no image: mount now so viewer can interact with annotations
-if (fromShare && shareLocked) {
-  state.annotations.pins.forEach(mountPinLayer);
-  state.annotations.regions.forEach(mountRegionLayer);
-  applyZOrder();
-}
+if (fromShare && shareLocked) mountAll();
 
 setMode('display');
 if (typeof lucide !== 'undefined') lucide.createIcons();
+loadImageUrl(BASEMAP_URL, { ifEmpty: true }); // missing file: the placeholder stays up

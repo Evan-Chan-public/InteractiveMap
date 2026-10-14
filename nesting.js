@@ -1,7 +1,9 @@
 // NESTING — stored parent links (item.parentId / item.parentManual), auto-assigned from geometry
 //
 // auto parent = region on the nearest layer closer to root (lower index) that covers most of the item;
-// for pins, the smallest region containing the point. Parents are always on a different layer.
+// for pins, the smallest region containing the point, starting with the pin's own layer.
+// Region parents are always on a different layer; pins can't contain anything, so a same-layer
+// region is safe (and is the natural home for a city pin drawn on a provinces layer).
 // Links are only recomputed on create / reshape / layer move / parent delete / explicit re-nest,
 // never on layer reorder. Manual links (parentManual) are left alone except when their parent is deleted.
 
@@ -124,7 +126,7 @@ export function autoParent(item) {
   const isPin   = itemType(item) === 'pin';
   const itemBox = isPin ? null : bboxOf(item);
 
-  for (let li = idx - 1; li >= 0; li--) {
+  for (let li = isPin ? idx : idx - 1; li >= 0; li--) {
     let best = null, bestArea = Infinity;
     for (const r of state.annotations.regions) {
       if (r.layerId !== layers[li].id || !r.polygons.length) continue;
@@ -150,19 +152,19 @@ export function renest(items) {
 }
 
 // after a region/pin is created, reshaped or moved: the item itself, its children,
-// and anything on a layer farther from root that it now overlaps
+// and anything on a layer farther from root that it now overlaps (pins: its own layer too)
 export function renestAround(item) {
   renest([item]);
   if (itemType(item) !== 'region') return;
   const layers = state.annotations.layers;
   const idx    = layers.findIndex(l => l.id === item.layerId);
   const box    = item.polygons.length ? bboxOf(item) : null;
-  const deeper = (other) => layers.findIndex(l => l.id === other.layerId) > idx;
+  const depth  = (other) => layers.findIndex(l => l.id === other.layerId);
   const affected = [
     ...state.annotations.regions.filter(r => r.id !== item.id && (r.parentId === item.id ||
-      (box && deeper(r) && r.polygons.length && bboxesOverlap(bboxOf(r), box)))),
+      (box && depth(r) > idx && r.polygons.length && bboxesOverlap(bboxOf(r), box)))),
     ...state.annotations.pins.filter(p => p.parentId === item.id ||
-      (box && deeper(p) && bboxHasPoint(box, p.latlng))),
+      (box && depth(p) >= idx && bboxHasPoint(box, p.latlng))),
   ];
   renest(affected);
 }

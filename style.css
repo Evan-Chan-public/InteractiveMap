@@ -309,6 +309,13 @@ body {
   pointer-events: none;
 }
 
+/* display mode: the region you drilled into frames its children (outlined, not clickable) */
+.leaflet-pane > svg path.leaflet-interactive.drill-frame {
+  pointer-events: none;
+  stroke-width: 3;
+  fill-opacity: 0.06;
+}
+
 /* MAP PLACEHOLDER */
 
 #map-placeholder {
