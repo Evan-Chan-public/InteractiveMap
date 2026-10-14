@@ -1,6 +1,10 @@
 export const state = {
   mode: 'display',       // 'display' | 'design'
-  image: null,           // { url, width, height, el } once loaded (el = the <img>, read by the wand)
+  title: '',             // map title: project files, export file name, browser tab
+  image: null,           // { url, width, height, el, source } once loaded (el = the <img>, read by the wand)
+                         // source: { kind: 'blob', blob, name } uploaded / imported, saved with the project
+                         //       | { kind: 'baseline', src }   ?map= / basemap.png / bundled map, not saved
+                         //       | { kind: 'ref', src }        referenced by a project file, saved as a reference
   annotations: {
     layers:  [],         // [{ id, name }] — array order = z-order; bottom = root, top = leaf
     regions: [],         // [{ id, polygons, color, label, body, hidden, layerId }]
@@ -14,6 +18,7 @@ export const state = {
     mergeHover:    null, // region id currently hovered as merge candidate
     activeLayerId: null, // currently selected layer; others render dimmed
     shareLocked:   false, // opened from a locked share link: design mode is off
+    autosave:      true,  // false while viewing a map opened from a link, until it's kept
   },
 };
 

@@ -1,26 +1,26 @@
 // APP — entry point: mode, tools, map/keyboard events and startup. Everything else lives in modules:
 //   map · render (leaflet layers, interactivity) · selection · panel (right panel) · layerstrip
 //   create (pins, regions, delete) · shapes (merge, vertex edit, brush/eraser) · wand · image · share · history
+//   project (file format, open/import/export) · persistence (autosave)
 //
 // modules import each other in cycles; that is safe because only this file runs code at load time.
 // the others just declare functions and wire listeners on their own elements.
 
 import { navStack, state } from './state.js';
 import { pointInRing } from './utils.js';
-import { ensureLayers, flags, loadAnnotations } from './persistence.js';
-import { ensureNesting, findAnnotation } from './nesting.js';
-import { loadShareHash } from './share.js';
+import { findAnnotation } from './nesting.js';
+import { readShareHash } from './share.js';
 import { map } from './map.js';
 import { redo, undo } from './history.js';
 import { clearSelection, goUp, showLayer } from './selection.js';
-import { applyLayerVisibility, drillFocus, mountAll } from './render.js';
+import { applyLayerVisibility, drillFocus } from './render.js';
 import { renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
-import { addPin, cancelRegionDraw, commitRegion, disarmDelete, draw, isDeleteArmed, requestDelete, seedColors,
+import { addPin, cancelRegionDraw, commitRegion, disarmDelete, draw, isDeleteArmed, requestDelete,
          startRegionDraw } from './create.js';
 import { cancelMerge, exitVertexEdit, hideBrushCursor, vertexEdit } from './shapes.js';
-import { loadBaseline, updatePlaceholder } from './image.js';
 import { initWorker, setWandStatus, triggerWand } from './wand.js';
+import { openDocument, openSaved } from './project.js';
 
 // DOM
 
@@ -183,32 +183,13 @@ document.addEventListener('keydown', (e) => {
 // INIT
 
 initWorker();
-
-const hashData  = location.hash.slice(1);
-const fromShare = hashData && await loadShareHash(hashData);
-if (fromShare) {
-  if (state.ui.shareLocked) btnMode.style.display = 'none';
-  else flags.restoredAwaitingImage = true; // defer mount until image upload
-  updatePlaceholder();
-} else {
-  const hadStored = loadAnnotations();
-  if (hadStored) {
-    flags.restoredAwaitingImage = true;
-    updatePlaceholder();
-  }
-}
-
-seedColors(state.annotations.regions.length);
-
-// guarantee at least one layer + a valid active layer (fresh maps land here too)
-ensureLayers(state.annotations);
-ensureNesting();
-state.ui.activeLayerId = state.annotations.layers[0].id;
-renderLayerStrip();
-
-// locked share with no image: mount now so viewer can interact with annotations
-if (fromShare && state.ui.shareLocked) mountAll();
-
-setMode('display');
 if (typeof lucide !== 'undefined') lucide.createIcons();
-loadBaseline();
+
+// a share link opens as a separate map that isn't saved unless it's kept; otherwise the saved map
+const hashData = location.hash.slice(1);
+const shared   = hashData ? await readShareHash(hashData) : null;
+if (shared) await openDocument(shared.doc, { autosave: false, locked: shared.lock });
+else        await openSaved();
+
+if (state.ui.shareLocked) btnMode.style.display = 'none';
+setMode('display');

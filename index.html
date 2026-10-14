@@ -18,6 +18,25 @@
     <div class="panel-header">Tools</div>
 
     <div class="tool-group">
+      <label class="field-label" for="project-title">Map</label>
+      <input id="project-title" type="text" class="field-input" placeholder="Untitled map" maxlength="200" />
+      <div class="tool-row">
+        <button id="project-export" class="tool-btn" title="Download this map (annotations + image) as a .imap.json file">
+          <i data-lucide="download"></i> Export
+        </button>
+        <button id="project-import" class="tool-btn" title="Open a .imap.json map file (or drop one on the map)">
+          <i data-lucide="folder-open"></i> Import
+        </button>
+      </div>
+      <input type="file" id="project-input" accept=".json,application/json" hidden />
+      <div id="link-notice" class="link-notice hidden">
+        Opened from a link: changes aren't saved.
+        <button id="keep-map" class="btn-link">Keep as my map</button>
+      </div>
+      <div id="project-status" class="wand-status"></div>
+    </div>
+
+    <div class="tool-group">
       <button id="tool-upload" class="tool-btn" title="Upload map image">
         <i data-lucide="upload"></i> Upload Image
       </button>
@@ -105,6 +124,13 @@
       <p>No map loaded.<br/>Switch to Design Mode and upload an image.</p>
     </div>
   </main>
+
+  <!-- Confirmation for actions that replace the current map -->
+  <dialog id="confirm-dialog" class="confirm-dialog">
+    <h3 class="dialog-title"></h3>
+    <p class="dialog-message"></p>
+    <div class="dialog-buttons"></div>
+  </dialog>
 
   <!-- Right panel: annotation details -->
   <aside id="detail-panel" class="panel panel-right hidden">

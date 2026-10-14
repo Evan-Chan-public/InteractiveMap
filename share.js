@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { ensureLayers, sanitizeAnnotations } from './persistence.js';
+import { sanitizeAnnotations } from './persistence.js';
 // SHARE LINKS — annotations packed into the URL hash
 //
 // v2: '#z' + base64url(deflate-raw(JSON)), coordinates rounded to 0.01px.
@@ -95,13 +95,11 @@ async function refreshShareUrl() {
     + 'The map image is not included: viewers get the baseline map if the site serves one, otherwise they upload it.';
 }
 
-export async function loadShareHash(hash) {
+// the map in a share link as a document to open, or null: { doc: { title, image, annotations }, lock }
+export async function readShareHash(hash) {
   const payload = await decodeShare(hash);
-  if (!payload) return false;
-  Object.assign(state.annotations, sanitizeAnnotations(payload.annotations));
-  ensureLayers(state.annotations);
-  state.ui.shareLocked = !!payload.lock;
-  return true;
+  if (!payload) return null;
+  return { doc: { title: '', image: null, annotations: sanitizeAnnotations(payload.annotations) }, lock: !!payload.lock };
 }
 
 btnShare.addEventListener('click', (e) => {

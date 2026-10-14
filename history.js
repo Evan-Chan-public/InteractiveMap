@@ -1,9 +1,9 @@
 // HISTORY — undo/redo over JSON snapshots of the annotations
 
-import { HISTORY_MAX, historyStack, layers, redoStack, state } from './state.js';
+import { HISTORY_MAX, historyStack, redoStack, state } from './state.js';
 import { scheduleSave } from './persistence.js';
 import { clearSelection } from './selection.js';
-import { mountAll } from './render.js';
+import { mountAll, unmountAll } from './render.js';
 import { renderLayerStrip } from './layerstrip.js';
 import { exitVertexEdit } from './shapes.js';
 
@@ -19,6 +19,13 @@ export function pushHistory() {
 // redo stays valid only while annotations are untouched since the last undo/redo.
 // checked lazily rather than in pushHistory, since focus handlers push without editing
 let restoredSnap = null;
+
+// a newly opened map starts with no history (undo can't cross into the previous map)
+export function resetHistory() {
+  historyStack.length = 0;
+  redoStack.length    = 0;
+  restoredSnap        = null;
+}
 
 export function undo() {
   exitVertexEdit();
@@ -42,10 +49,7 @@ export function redo() {
 
 function restoreSnapshot(json) {
   const snap = JSON.parse(json);
-  Object.values(layers.pins).forEach(m => m.remove());
-  Object.values(layers.regions).forEach(g => g.remove());
-  layers.pins    = {};
-  layers.regions = {};
+  unmountAll();
   state.annotations = snap;
   // active layer may no longer exist after undo/redo
   if (!state.annotations.layers.some(l => l.id === state.ui.activeLayerId)) {

@@ -140,6 +140,29 @@ Every region and pin can have a parent region on another layer, forming a tree.
 - Set a parent by hand with the **Parent** dropdown in the editor. Manual parents are kept through re-nesting; choose **Auto** to go back.
 - A selected item's panel shows a breadcrumb of its ancestors and an expandable **Contains** tree of its children; click any entry to jump to it.
 
+### Map Files
+
+A map (title, layers, regions, pins and the map image) can be saved as one `.imap.json` file. The **Map** section at the top of the left panel (Design Mode) holds the title and the **Export** / **Import** buttons; you can also drop a `.imap.json` file anywhere on the map to open it.
+
+- **Export** downloads `<title>.imap.json`. The image is embedded, so the file opens anywhere; the bundled world map (`maps/…`) is stored as a reference instead, since it ships with the app.
+- **Import** replaces the current map. If the current map has content you're asked first, with an option to export it before replacing. Undo history starts fresh with the opened map.
+- Files are checked on open like share links: unknown or malformed fields are dropped, only PNG/JPEG/GIF/WebP images are accepted, and image references must be `http(s)` or relative paths.
+
+Format (version 1, plain JSON):
+
+```json
+{
+  "format": "interactive-map",
+  "version": 1,
+  "title": "Europe",
+  "modified": "2026-10-14T12:00:00.000Z",
+  "image": { "width": 5632, "height": 2048, "name": "europe.png", "data": "data:image/png;base64,…" },
+  "annotations": { "layers": [ … ], "regions": [ … ], "pins": [ … ] }
+}
+```
+
+`image` may instead be `{ "width", "height", "src": "maps/world.png" }` (a reference) or `null` (use the viewer's baseline map). Files from a newer version of the app are refused with a message rather than misread; older versions are upgraded on load.
+
 ### Sharing
 
 Click **Share** (top-right) to generate a URL encoding the current annotations.
@@ -150,9 +173,12 @@ Click **Share** (top-right) to generate a URL encoding the current annotations.
 - Links are compressed; the dialog shows the link size and warns when it's long enough that some apps may cut it off. Older uncompressed links still open.
 - Everything in a link is treated as untrusted: ids, colours and coordinates are validated on load, and descriptions are sanitized before their Markdown is rendered.
 - Locking is a convenience, not access control: anyone can edit the link itself.
+- A shared map opens separately from your own: unlocked links can be edited, but nothing is saved (a notice in the left panel says so) until you click **Keep as my map**, which replaces your saved map.
 
 ---
 
 ## Data Persistence
 
-Annotations are auto-saved to `localStorage` after edits. They are restored automatically on next load if the same map image is uploaded. To clear all data, use the discard option shown on load when saved data is detected.
+The current map autosaves to the browser's IndexedDB after every edit: annotations, title and an uploaded image, so everything (image included) comes back on the next visit. Baseline maps aren't stored, since they're loaded from their file each time. Where IndexedDB isn't available, annotations fall back to `localStorage` as before; maps saved there by older versions are moved over automatically.
+
+Saved data lives in this browser only. Use **Export** to keep a copy or move a map elsewhere. If a saved map's image can't be loaded, the placeholder offers to discard the saved map.

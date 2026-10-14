@@ -150,6 +150,13 @@ export function mountAll() {
   applyZOrder();
 }
 
+export function unmountAll() {
+  Object.values(layers.pins).forEach(m => m.remove());
+  Object.values(layers.regions).forEach(g => g.remove());
+  layers.pins    = {};
+  layers.regions = {};
+}
+
 export function unmountRegion(id) {
   layers.regions[id]?.remove();
   delete layers.regions[id];
