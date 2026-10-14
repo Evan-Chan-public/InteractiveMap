@@ -2,6 +2,8 @@ export const state = {
   mode: 'display',       // 'display' | 'design'
   title: '',             // map title: project files, export file name, browser tab
   image: null,           // { url, width, height, el, source } once loaded (el = the <img>, read by the wand)
+  docImage: null,        // the map's own image (a source below), saved with it. Can differ from what's
+                         // shown: a ?map= override or a fallback baseline never replaces it
                          // source: { kind: 'blob', blob, name } uploaded / imported, saved with the project
                          //       | { kind: 'baseline', src }   ?map= / basemap.png / bundled map, not saved
                          //       | { kind: 'ref', src }        referenced by a project file, saved as a reference

@@ -47,8 +47,11 @@ function report(status, message = '') {
 
 // SAVE
 
-let saveTimer  = null;
-let imageDirty = false;
+let saveTimer   = null;
+let imageDirty  = false; // the map's own image changed since it was last written
+let imageStored = false; // IndexedDB's 'image' Blob is the map's current image
+let imageFailed = false; // the current image couldn't be written: keep saying so until it changes
+let saving      = Promise.resolve(true);
 
 // image: the map image changed and must be written too
 export function scheduleSave({ image = false } = {}) {
@@ -58,40 +61,58 @@ export function scheduleSave({ image = false } = {}) {
   saveTimer = setTimeout(saveNow, 300);
 }
 
-export async function saveNow() {
+// resolves true if everything was saved. Saves run one at a time, so an older one can't land last
+export function saveNow() {
   clearTimeout(saveTimer);
   saveTimer = null;
-  if (!state.ui.autosave) return;
-  const writeImage = imageDirty;
-  imageDirty = false;
+  saving = saving.then(writeSave, writeSave);
+  return saving;
+}
+
+async function writeSave() {
+  if (!state.ui.autosave) return false;
+  const img = await imageRecord({ forFile: false });
+  const { blob, ...meta } = img ?? {};
+  let ok = true;
+
+  // the image goes in its own transaction: a full disk must not stop the annotations saving too.
+  // a failed write isn't retried until the image changes again
+  if (imageDirty) {
+    imageDirty = false;
+    try {
+      await transact('readwrite', store => { if (blob) store.put(blob, 'image'); else store.delete('image'); });
+      imageStored = !!blob;
+      imageFailed = false;
+    } catch (err) {
+      imageStored = false;
+      imageFailed = true;
+      ok = false;
+      console.warn('Could not save the map image:', err);
+      report('error', `the map image (${failure(err)}); export the map to keep it`);
+    }
+  }
+
   const record = {
     format:      FORMAT,
     version:     VERSION,
     title:       state.title,
     modified:    new Date().toISOString(),
-    image:       null,
+    image:       img ? (blob ? { ...meta, stored: imageStored } : meta) : null,
     annotations: state.annotations,
   };
-  const img = await imageRecord({ forFile: false });
-  let blob = null;
-  if (img) {
-    ({ blob, ...record.image } = img);
-    if (blob) record.image.stored = true; // the Blob lives under 'image'
-  }
   try {
-    await transact('readwrite', store => {
-      store.put(record, 'project');
-      if (writeImage) { if (blob) store.put(blob, 'image'); else store.delete('image'); }
-    });
-    report('saved');
+    await transact('readwrite', store => { store.put(record, 'project'); });
+    if (!imageFailed) report('saved');
+    return ok;
   } catch (err) {
-    if (writeImage) imageDirty = true; // try the image again next time
-    if (!(await saveLegacy())) {
-      console.warn('Could not save the map:', err);
-      report('error', err?.name === 'QuotaExceededError' ? 'Storage is full' : (err?.message || 'unknown error'));
-    }
+    if (await saveLegacy()) return ok;
+    console.warn('Could not save the map:', err);
+    report('error', failure(err));
+    return false;
   }
 }
+
+const failure = (err) => err?.name === 'QuotaExceededError' ? 'storage is full' : (err?.message || 'unknown error');
 
 // annotations only, for browsers without IndexedDB
 async function saveLegacy() {
@@ -147,7 +168,8 @@ export async function loadSaved() {
   if (!project) return null;
 
   let img = project.image ?? null;
-  if (img?.stored) img = image ? { ...img, blob: image } : null; // the Blob went missing: fall back to the baseline
+  if (img && 'stored' in img) img = img.stored && image ? { ...img, blob: image } : null; // no Blob: the baseline
+  imageStored = !!img?.blob;
   return { title: project.title, image: img, annotations: project.annotations };
 }
 
@@ -155,6 +177,8 @@ export async function clearSaved() {
   clearTimeout(saveTimer);
   saveTimer = null;
   imageDirty = false;
+  imageStored = false;
+  imageFailed = false;
   try { LEGACY_KEYS.forEach(k => localStorage.removeItem(k)); } catch {}
   try { await transact('readwrite', store => { store.delete('project'); store.delete('image'); }); } catch {}
 }

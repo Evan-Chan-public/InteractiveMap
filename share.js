@@ -89,7 +89,7 @@ const fileNote         = document.getElementById('share-file-note');
 const mapBanner        = document.getElementById('map-banner');
 
 // links to this app carry only ?map= over from the current address (not ?gist=, ?project= or ?edit)
-function appUrl(params = {}) {
+export function appUrl(params = {}) {
   const q = new URLSearchParams();
   if (mapParam) q.set('map', mapParam);
   for (const [k, v] of Object.entries(params)) if (v != null) q.set(k, v);

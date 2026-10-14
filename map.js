@@ -11,3 +11,6 @@ export const map = L.map('map', {
   zoomAnimation: false,
   attributionControl: false,
 });
+
+// the map image sits in its own pane under the annotations (overlayPane is z-index 400)
+map.createPane('mapImage').style.zIndex = 350;

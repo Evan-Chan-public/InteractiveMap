@@ -13,7 +13,9 @@ import { resetHistory } from './history.js';
 import { mountAll, unmountAll } from './render.js';
 import { renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
-import { cancelRegionDraw, seedColors } from './create.js';
+import { cancelRegionDraw, disarmDelete, seedColors } from './create.js';
+import { cancelWand } from './wand.js';
+import { appUrl } from './share.js';
 import { cancelMerge, exitVertexEdit } from './shapes.js';
 import { imageRecord, loadBaseline, loadImageFile, mapParam, showImage, updatePlaceholder } from './image.js';
 
@@ -43,7 +45,8 @@ const IMAGE_SRC  = /^(https?:\/\/|(?![a-z][\w+.-]*:))[^\s"'<>]+$/i; // http(s) o
 // a project object (from a file, a link or storage) → { title, image, annotations }. throws on bad input
 export async function parseProject(obj) {
   if (!obj || typeof obj !== 'object' || obj.format !== FORMAT) throw new Error('not an Interactive Map project file');
-  let version = Number.isInteger(obj.version) ? obj.version : 1;
+  let version = obj.version;
+  if (!Number.isInteger(version) || version < 1) throw new Error('the file has no valid format version');
   if (version > VERSION) throw new Error(`made by a newer version of the app (format ${version}); update to open it`);
   for (; version < VERSION; version++) obj = MIGRATIONS[version](obj);
 
@@ -87,6 +90,9 @@ function formatJson(obj) {
     .replace(/\{\n\s+"lat": ([^,\n]+),\n\s+"lng": ([^\n]+)\n\s+\}/g, '{ "lat": $1, "lng": $2 }');
 }
 
+// the saved map couldn't be read: this session doesn't save (and isn't a link session either)
+let savedUnreadable = false;
+
 const emptyDocument = () => ({ title: '', image: null, annotations: { layers: [], regions: [], pins: [] } });
 
 // OPEN
@@ -98,9 +104,12 @@ export async function openDocument(doc, { autosave = true, locked = false, useMa
   exitVertexEdit();
   cancelRegionDraw();
   cancelMerge();
+  cancelWand();    // a fill traced from the old image must not land on the new map
+  disarmDelete();
   unmountAll();
 
   state.title             = doc.title || '';
+  state.docImage          = doc.image ?? null;
   state.annotations       = doc.annotations;
   state.ui.autosave       = autosave;
   state.ui.shareLocked    = locked;
@@ -116,32 +125,42 @@ export async function openDocument(doc, { autosave = true, locked = false, useMa
   mountAll();
   renderProjectPanel();
 
-  // the doc's own image, falling back to the baseline
-  const own   = doc.image && !(useMapParam && mapParam);
-  const shown = own && await showImage(doc.image);
-  if (!shown) {
-    if (own) setStatus('The map image could not be loaded; showing the baseline map.', true);
+  // the doc's own image, falling back to the baseline. Either way doc.image stays the map's image
+  // (state.docImage), so a fallback or override is never saved over it
+  const own    = doc.image && !(useMapParam && mapParam);
+  const result = own ? await showImage(doc.image) : 'failed';
+  if (result === 'failed') {
+    if (own) setStatus('The map image could not be loaded; showing the baseline map for now.', true);
     await loadBaseline();
   }
   updatePlaceholder();
   renderDetailPanel();
 }
 
-// the saved map, or an empty one
+// the saved map, or an empty one. A saved map that can't be read is left untouched: the session
+// opens empty and doesn't autosave over it
 export async function openSaved() {
   const saved = await loadSaved();
-  let doc = emptyDocument();
-  if (saved) {
-    try {
-      doc = await parseProject({ format: FORMAT, version: VERSION, ...saved });
-    } catch (err) {
-      console.warn('Saved map could not be read:', err);
-    }
+  if (!saved) { await openDocument(emptyDocument(), { autosave: true, useMapParam: true }); return; }
+  try {
+    const doc = await parseProject({ format: FORMAT, version: VERSION, ...saved });
+    await openDocument(doc, { autosave: true, useMapParam: true });
+  } catch (err) {
+    console.warn('Saved map could not be read:', err);
+    savedUnreadable = true;
+    await openDocument(emptyDocument(), { autosave: false, useMapParam: true });
+    setStatus("Your saved map couldn't be read, so it's left as it is and this session won't save. Importing a map replaces it.", true);
   }
-  await openDocument(doc, { autosave: true, useMapParam: true });
 }
 
-export async function discardSaved() {
+export async function discardSaved({ ask: confirmFirst = false } = {}) {
+  if (confirmFirst) {
+    const choice = await ask('Discard the saved map?', 'Its annotations and image are deleted from this browser. This can’t be undone.', [
+      { value: 'replace', label: 'Discard', danger: true },
+      { value: 'cancel',  label: 'Cancel' },
+    ]);
+    if (choice !== 'replace') return;
+  }
   await clearSaved();
   await openDocument(emptyDocument(), { autosave: true });
   setStatus('Saved map discarded.');
@@ -182,15 +201,17 @@ export async function importFile(file) {
   const choice = await confirmReplace(`Open “${doc.title || file.name}”?`);
   if (choice === 'cancel') return;
   if (choice === 'export') await exportFile();
+  savedUnreadable = false;
   await openDocument(doc, { autosave: true });
+  forgetLinkInAddress();
   scheduleSave({ image: true });
-  await saveNow();
-  setStatus(`Opened ${file.name}.`);
+  if (await saveNow()) setStatus(`Opened ${file.name}.`);
 }
 
 // replacing the saved map can't be undone: offer to export it first
 async function confirmReplace(question) {
-  if (!hasContent() && !state.image?.source?.blob) return 'replace';
+  // a linked map is on screen: the saved one it would replace isn't, so always ask
+  if (state.ui.autosave && !hasContent() && !state.docImage) return 'replace';
   const saved = state.ui.autosave ? 'your current map' : 'your saved map (if you have one)';
   return ask(question, `This replaces ${saved}, and it can't be undone.`, [
     ...(state.ui.autosave ? [{ value: 'export', label: 'Export current first' }] : []),
@@ -208,21 +229,27 @@ async function keepMap() {
   ]);
   if (choice !== 'replace') return;
   state.ui.autosave = true;
+  forgetLinkInAddress();
   scheduleSave({ image: true });
-  await saveNow();
+  const ok = await saveNow();
   renderProjectPanel();
-  setStatus('Saved as your map.');
+  if (ok) setStatus('Saved as your map.');
+}
+
+// once a linked map is kept (or replaced by an import), reloading must open the saved map, not the link
+function forgetLinkInAddress() {
+  history.replaceState(null, '', appUrl());
 }
 
 // UI
 
 export function renderProjectPanel() {
   if (titleInput && document.activeElement !== titleInput) titleInput.value = state.title;
-  linkNotice?.classList.toggle('hidden', state.ui.autosave);
+  linkNotice?.classList.toggle('hidden', state.ui.autosave || savedUnreadable);
   document.title = state.title ? `${state.title} · Interactive Map` : 'Interactive Map';
 }
 
-function setStatus(message, isError = false) {
+export function setStatus(message, isError = false) {
   if (!statusEl) return;
   statusEl.textContent = message;
   statusEl.classList.toggle('error', isError);

@@ -75,7 +75,7 @@ function updateWandTicker(msg) {
   setWandStatus(`${label}… ${elapsed}s${extra}`);
 }
 
-function cancelWand() {
+export function cancelWand() {
   if (!wandPending) return;
   worker.terminate();
   worker      = null;

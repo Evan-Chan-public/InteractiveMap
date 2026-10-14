@@ -5,7 +5,7 @@ import { scheduleSave } from './persistence.js';
 import { map } from './map.js';
 import { applyInteractivity, applyZOrder } from './render.js';
 import { renderDetailPanel } from './panel.js';
-import { discardSaved } from './project.js';
+import { discardSaved, setStatus } from './project.js';
 
 // DOM
 
@@ -37,7 +37,7 @@ export function updatePlaceholder() {
         ${state.ui.autosave ? '<button id="discard-saved" class="btn-link">Discard saved map</button>' : ''}
       </div>
     `;
-    document.getElementById('discard-saved')?.addEventListener('click', discardSaved);
+    document.getElementById('discard-saved')?.addEventListener('click', () => discardSaved({ ask: true }));
   } else if (state.ui.shareLocked) {
     ph.innerHTML = '<p>No map image provided with this share link.</p>';
   } else {
@@ -61,9 +61,19 @@ document.addEventListener('paste', (e) => {
   if (item) loadImageFile(item.getAsFile());
 });
 
-// an uploaded, pasted or dropped image becomes part of the project
+// the types a project file accepts back on import (keeps Export a reliable backup)
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
+// an uploaded, pasted or dropped image becomes the map's own image
 export async function loadImageFile(file) {
-  if (await showImage({ kind: 'blob', blob: file, name: file.name })) scheduleSave({ image: true });
+  if (!IMAGE_TYPES.includes(file.type)) {
+    setStatus(`${file.name || 'That image'} isn't a PNG, JPEG, GIF or WebP.`, true);
+    return;
+  }
+  const source = { kind: 'blob', blob: file, name: file.name || 'pasted image' };
+  if (await showImage(source) !== 'loaded') return;
+  state.docImage = source;
+  scheduleSave({ image: true });
 }
 
 // baseline map, used when the project has no image of its own: ?map=file if given, else a local
@@ -75,25 +85,37 @@ export const mapParam = MAP_PARAM;
 
 export async function loadBaseline(urls = BASEMAP_URLS) {
   for (const src of urls) {
-    if (await showImage({ kind: 'baseline', src }, { quiet: true })) return true;
+    const result = await showImage({ kind: 'baseline', src }, { quiet: true });
+    if (result === 'loaded') return true;
+    if (result === 'superseded') return false; // something newer is already showing
   }
   clearImage(); // nothing found: the placeholder takes over
   return false;
 }
 
-// source: { kind: 'blob', blob, name } | { kind: 'baseline' | 'ref', src }. resolves false if it can't load
+// only the most recent request may show its image: a slow baseline must not replace a later upload
+let loadToken = 0;
+
+// source: { kind: 'blob', blob, name } | { kind: 'baseline' | 'ref', src }
+// resolves 'loaded', 'failed', or 'superseded' (a later showImage call got there first)
 export function showImage(source, { quiet = false } = {}) {
+  const token = ++loadToken;
   const url = source.kind === 'blob' ? URL.createObjectURL(source.blob) : source.src;
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
+      if (token !== loadToken) {
+        if (source.kind === 'blob') URL.revokeObjectURL(url);
+        resolve('superseded');
+        return;
+      }
       applyImage(img, url, source);
-      resolve(true);
+      resolve('loaded');
     };
     img.onerror = () => {
       if (source.kind === 'blob') URL.revokeObjectURL(url);
       if (!quiet) console.warn('Could not load map image:', source.name || url);
-      resolve(false);
+      resolve(token === loadToken ? 'failed' : 'superseded');
     };
     img.src = url;
   });
@@ -105,10 +127,12 @@ function applyImage(img, url, source) {
   const old    = state.image;
   if (imageOverlay) imageOverlay.remove();
   mapBounds    = [[0, 0], [-height, width]];
-  imageOverlay = L.imageOverlay(url, mapBounds).addTo(map);
+  // its own pane, below the annotations whatever order things were added in
+  imageOverlay = L.imageOverlay(url, mapBounds, { pane: 'mapImage' }).addTo(map);
   map.fitBounds(mapBounds);
   if (old?.source.kind === 'blob' && old.url !== url) URL.revokeObjectURL(old.url);
   state.image  = { url, width, height, el: img, source };
+  if (source === state.docImage) Object.assign(source, { width, height });
   mapPlaceholder.classList.add('hidden');
   // annotations mounted before the map had a view get their elements now: restack and restyle them
   applyZOrder();
@@ -117,6 +141,7 @@ function applyImage(img, url, source) {
 }
 
 export function clearImage() {
+  loadToken++;
   if (imageOverlay) imageOverlay.remove();
   imageOverlay = null;
   if (state.image?.source.kind === 'blob') URL.revokeObjectURL(state.image.url);
@@ -129,19 +154,25 @@ export function clearImage() {
 
 // bundled maps ship with the app, so projects refer to them by path instead of embedding them
 const isBundled = (src) => /^maps\/[\w.-]+$/.test(src);
+const nameOf    = (source) => source.name || (source.src || '').split(/[/?#]/).filter(Boolean).pop() || 'map';
+const sizeOf    = (source) => ({ width: source.width ?? state.image?.width, height: source.height ?? state.image?.height });
 
-// the image as a project stores it. forFile: embedded as a data URL (a JSON file can't hold a Blob);
-// otherwise as the Blob itself (IndexedDB stores it directly). Baselines aren't saved with the project
-// unless it's going into a file, where the recipient may not have the same baseline.
+// the image as a project stores it. This is the map's own image (state.docImage), which can differ
+// from what's on screen: a ?map= override or a fallback baseline must never replace it.
+// Autosave (forFile false): the Blob itself, or a reference; nothing is fetched.
+// Files (forFile true): embedded as a data URL, except bundled maps; a map without its own image
+// embeds the baseline on screen, since the recipient may not have the same one.
 export async function imageRecord({ forFile }) {
-  const img = state.image;
-  if (!img) return null;
-  const { width, height, source } = img;
-  if (source.kind === 'baseline' && !forFile) return null;
-  if (source.kind !== 'blob' && isBundled(source.src)) return { width, height, src: source.src };
+  const own = state.docImage;
+  if (!forFile) {
+    if (!own) return null;
+    return own.kind === 'blob' ? { ...sizeOf(own), name: nameOf(own), blob: own.blob } : { ...sizeOf(own), src: own.src };
+  }
+  const source = own ?? (state.image?.source.kind === 'baseline' ? state.image.source : null);
+  if (!source) return null;
+  if (source.kind !== 'blob' && isBundled(source.src)) return { ...sizeOf(source), src: source.src };
 
   let blob = source.blob;
-  const name = source.name || (source.src || '').split(/[/?#]/).filter(Boolean).pop() || 'map';
   if (!blob) {
     try {
       const res = await fetch(source.src);
@@ -149,11 +180,10 @@ export async function imageRecord({ forFile }) {
       blob = await res.blob();
     } catch (err) {
       console.warn('Could not read the map image to embed it; saving a reference instead:', err);
-      return { width, height, src: source.src };
+      return { ...sizeOf(source), src: source.src };
     }
   }
-  if (!forFile) return { width, height, name, blob };
-  return { width, height, name, data: await blobToDataUrl(blob) };
+  return { ...sizeOf(source), name: nameOf(source), data: await blobToDataUrl(blob) };
 }
 
 function blobToDataUrl(blob) {
