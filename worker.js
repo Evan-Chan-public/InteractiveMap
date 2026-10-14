@@ -1,13 +1,24 @@
 // WASM worker — flood fill -> contour trace -> RDP simplify -> polygon points
 
-importScripts('./processor.js');
-
 let Module = null;
 
-createProcessor().then(mod => {
-  Module = mod;
-  postMessage({ type: 'ready' });
+// fetched with revalidation, so a rebuilt processor is never shadowed by a cached copy
+// (importScripts and emscripten's own wasm fetch can both be served stale from cache)
+const load = (path, as) => fetch(path, { cache: 'no-cache' }).then(r => {
+  if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+  return r[as]();
 });
+
+Promise.all([load('./processor.js', 'text'), load('./processor.wasm', 'arrayBuffer')])
+  .then(([glue, wasmBinary]) => {
+    importScripts(URL.createObjectURL(new Blob([glue], { type: 'text/javascript' })));
+    return createProcessor({ wasmBinary });
+  })
+  .then(mod => {
+    Module = mod;
+    postMessage({ type: 'ready' });
+  })
+  .catch(err => postMessage({ type: 'error', reason: 'processor failed to load: ' + err.message }));
 
 self.onmessage = (e) => {
   const msg = e.data;
