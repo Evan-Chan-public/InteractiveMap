@@ -41,7 +41,7 @@ Requires [Emscripten](https://emscripten.org/docs/getting_started/downloads.html
 ### Display Mode
 The default view. Regions and pins are visible and selectable; clicking them opens a details panel on the right. Design tools are hidden.
 
-Clicking a region drills into it: the region stays outlined, its children become clickable (whichever layer they're on), and everything else fades. Selecting something with no children keeps its siblings clickable. `Esc` or the **← parent** button goes up a level; at the top level it returns to browsing the active layer. Clicking a layer chip leaves the drill-down and browses that layer. Hidden regions are skipped, so their children appear under the next visible ancestor.
+Clicking a region drills into it: the region stays outlined, its children become clickable (whichever layer they're on), and everything else fades. Selecting something with no children keeps its siblings clickable. `Esc` or the **← parent** button goes up a level; at the top level it returns to browsing the active layer. Clicking the map outside the area you're in (or outside the selected item) deselects and returns to the outermost layer; clicks inside it that miss a child do nothing. Clicking a layer chip leaves the drill-down and browses that layer. Hidden regions are skipped, so their children appear under the next visible ancestor.
 
 ### Design Mode
 Toggle with the **Design Mode** button (top-right). Exposes all editing tools and lets you create, modify, and delete annotations.

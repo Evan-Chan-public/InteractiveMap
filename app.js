@@ -1,5 +1,5 @@
 import { state, layers, historyStack, redoStack, navStack, HISTORY_MAX } from './state.js';
-import { generateId, escapeHtml,
+import { generateId, escapeHtml, pointInRing,
          circlePoly, latlngDist, ringToGeom, MERGE_BUFFER_PX, inflatePolygon } from './utils.js';
 import { flags, scheduleSave, loadAnnotations, clearSavedAnnotations, ensureLayers,
          sanitizeAnnotations } from './persistence.js';
@@ -1612,8 +1612,19 @@ function refreshTree() {
 
 // MAP EVENTS
 
+// display: a click outside the drill-down (or the selection) leaves it for the outermost layer.
+// clicks inside it reach here through faded items and the frame, and are ignored
+function onDisplayMapClick(latlng) {
+  const sel = state.ui.selected;
+  if (!sel) return;
+  const area = drillFocus() ?? (sel.type === 'region' ? findAnnotation('region', sel.id) : null);
+  if (area?.polygons.some(ring => pointInRing(latlng, ring))) return;
+  showLayer(state.annotations.layers[0].id);
+  clearSelection();
+}
+
 map.on('click', (e) => {
-  if (state.mode !== 'design') return;
+  if (state.mode !== 'design') { onDisplayMapClick(e.latlng); return; }
   if      (state.ui.activeTool === 'pin')    addPin(e.latlng);
   else if (state.ui.activeTool === 'region') startRegionDraw(e.latlng);
   else if (state.ui.activeTool === 'wand')   triggerWand(e.latlng);
