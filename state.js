@@ -1,6 +1,6 @@
 export const state = {
   mode: 'display',       // 'display' | 'design'
-  image: null,           // { url, width, height } once loaded
+  image: null,           // { url, width, height, el } once loaded (el = the <img>, read by the wand)
   annotations: {
     layers:  [],         // [{ id, name }] — array order = z-order; bottom = root, top = leaf
     regions: [],         // [{ id, polygons, color, label, body, hidden, layerId }]
@@ -13,6 +13,7 @@ export const state = {
     mergeSource:   null, // region id being used as merge source
     mergeHover:    null, // region id currently hovered as merge candidate
     activeLayerId: null, // currently selected layer; others render dimmed
+    shareLocked:   false, // opened from a locked share link: design mode is off
   },
 };
 

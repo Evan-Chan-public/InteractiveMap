@@ -77,6 +77,11 @@ function coverage(child, parent) {
 
 // LOOKUPS
 
+export function findAnnotation(type, id) {
+  const list = type === 'region' ? state.annotations.regions : state.annotations.pins;
+  return list.find(a => a.id === id);
+}
+
 export function findItem(id) {
   return state.annotations.regions.find(r => r.id === id)
       || state.annotations.pins.find(p => p.id === id);
@@ -189,4 +194,32 @@ export function ensureNesting() {
   if (all.every(it => 'parentId' in it)) return;
   all.forEach(it => { if (!('parentId' in it)) { it.parentId = null; it.parentManual = false; } });
   renest(all);
+}
+
+// VIEW — the tree as the current mode shows it (display mode skips hidden items)
+
+export function visibleInMode(it) {
+  return state.mode !== 'display' || !it.hidden;
+}
+
+// children as the current mode shows them: a hidden child is skipped and its children take its place
+export function childrenInView(id, seen = new Set([id])) {
+  const { regions, pins } = childrenOf(id);
+  const out = { regions: [], pins: pins.filter(visibleInMode) };
+  for (const r of regions) {
+    if (visibleInMode(r)) { out.regions.push(r); continue; }
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    const sub = childrenInView(r.id, seen);
+    out.regions.push(...sub.regions);
+    out.pins.push(...sub.pins);
+  }
+  return out;
+}
+
+export const countInView = ({ regions, pins }) => regions.length + pins.length;
+
+// nearest ancestor the current mode shows
+export function parentInView(item) {
+  return item ? ancestorsOf(item).filter(visibleInMode).at(-1) ?? null : null;
 }

@@ -23,6 +23,31 @@ External dependencies (Leaflet, Marked, Lucide) are loaded from CDN, so an inter
 
 ---
 
+## Code Layout
+
+Plain ES modules, no build step. `app.js` is the entry point (mode, tools, map and keyboard events, startup); the rest:
+
+| Module | Holds |
+|---|---|
+| `state.js` | shared app state and the Leaflet layer registry |
+| `persistence.js` | localStorage save/load and sanitizing loaded data |
+| `nesting.js` | parent links, auto-nesting, tree lookups |
+| `map.js` | the Leaflet map |
+| `render.js` | drawing annotations, stacking order, what's clickable/faded |
+| `selection.js` | selection and back/up navigation |
+| `panel.js` | the right panel: layer list, details, editor, tree |
+| `layerstrip.js` | the layer chips and moving items between layers |
+| `create.js` | new pins and regions, colours, deletion |
+| `shapes.js` | merge, consolidate, vertex edit, brush, eraser |
+| `wand.js` | flood fill via the WASM worker |
+| `image.js` | map image upload, paste and baseline file |
+| `share.js` | share links: encoding and the dialog |
+| `history.js` | undo/redo |
+
+Modules import each other in cycles. That's safe because only `app.js` runs code at load time; the others just declare functions and attach listeners to their own elements.
+
+---
+
 ## Rebuilding the WASM Module
 
 The compiled files (`processor.js`, `processor.wasm`) are pre-built and excluded from git. If you modify `wasm/processor.cpp`, rebuild with:

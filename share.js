@@ -1,3 +1,5 @@
+import { state } from './state.js';
+import { ensureLayers, sanitizeAnnotations } from './persistence.js';
 // SHARE LINKS — annotations packed into the URL hash
 //
 // v2: '#z' + base64url(deflate-raw(JSON)), coordinates rounded to 0.01px.
@@ -68,3 +70,58 @@ export async function decodeShare(hash) {
     return null;
   }
 }
+
+// DOM
+
+const btnShare         = document.getElementById('btn-share');
+const shareDialog      = document.getElementById('share-dialog');
+const shareLock        = document.getElementById('share-lock');
+const shareUrl         = document.getElementById('share-url');
+const shareCopy        = document.getElementById('share-copy');
+const shareNote        = document.getElementById('share-note');
+
+// SHARE DIALOG
+
+// long links still work in the address bar, but chat apps and some sites cut them off
+const LONG_LINK_CHARS = 8000;
+
+async function refreshShareUrl() {
+  shareUrl.value = 'Building link…';
+  const hash = await encodeShare(state.annotations, shareLock.checked);
+  shareUrl.value = `${location.origin}${location.pathname}${location.search}#${hash}`;
+  const kb = (shareUrl.value.length / 1024).toFixed(1);
+  shareNote.textContent = (shareUrl.value.length > LONG_LINK_CHARS
+    ? `Long link (${kb} KB): some apps may cut it off. ` : `Link size ${kb} KB. `)
+    + 'The map image is not included: viewers get the baseline map if the site serves one, otherwise they upload it.';
+}
+
+export async function loadShareHash(hash) {
+  const payload = await decodeShare(hash);
+  if (!payload) return false;
+  Object.assign(state.annotations, sanitizeAnnotations(payload.annotations));
+  ensureLayers(state.annotations);
+  state.ui.shareLocked = !!payload.lock;
+  return true;
+}
+
+btnShare.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpen = !shareDialog.classList.contains('hidden');
+  shareDialog.classList.toggle('hidden', isOpen);
+  if (!isOpen) refreshShareUrl();
+});
+
+shareLock.addEventListener('change', refreshShareUrl);
+
+shareCopy.addEventListener('click', () => {
+  navigator.clipboard.writeText(shareUrl.value).then(() => {
+    shareCopy.textContent = 'Copied!';
+    setTimeout(() => { shareCopy.textContent = 'Copy'; }, 1500);
+  });
+});
+
+document.addEventListener('click', (e) => {
+  if (!shareDialog.classList.contains('hidden') && !shareDialog.contains(e.target) && e.target !== btnShare) {
+    shareDialog.classList.add('hidden');
+  }
+});
