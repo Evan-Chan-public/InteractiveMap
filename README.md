@@ -1,4 +1,4 @@
-# Interactive Map
+# Cairn
 
 A lightweight browser-based tool for annotating custom map images. Aims to produce a sort of... locationally nested filesystem.
 
