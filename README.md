@@ -78,7 +78,16 @@ Toggle with the **Design Mode** button (top-right). Exposes all editing tools an
 ### Upload a Map
 In Design Mode, use **Upload Image** (or paste) to load a JPEG or PNG as the map background. The image is stored in memory only — annotations are saved separately to `localStorage`.
 
-**Baseline map:** if a `basemap.png` sits next to `index.html`, it loads automatically on startup. Add `?map=other.png` to the URL to load a different file instead. Uploading still replaces it for the session. If the file is missing, the app falls back to the upload prompt.
+**Baseline map:** on startup the app loads, in order of preference:
+1. the file named by `?map=other.png` in the URL, if given;
+2. `basemap.png` next to `index.html` (gitignored, so it's your own local map);
+3. `maps/world.png`, the bundled world map.
+
+Uploading still replaces it for the session.
+
+**World map:** `maps/world.png` is a 4096×1650 black-and-white map of country borders (85°N to 60°S, equirectangular, Antarctica left out), drawn from [Natural Earth](https://www.naturalearthdata.com/) 1:50m data (public domain). Each country is a closed outline, so **Flood Region** fills one country per click. `maps/render_world.py` regenerates it (instructions at the top of the file; standard library only).
+
+The flood fill works within a 1024×1024 window around the click, so the largest countries (Russia, Canada) fill only partly in one click. Fill the rest with a second click and **Merge**, or the brush.
 
 ### Pins
 - **Add Pin** tool: click anywhere on the map (including on top of regions) to place a pin.

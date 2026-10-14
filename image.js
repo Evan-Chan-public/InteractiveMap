@@ -70,17 +70,27 @@ function loadImageFile(file) {
   loadImageUrl(URL.createObjectURL(file));
 }
 
-// baseline map, loaded at startup unless an image is already up. ?map=other.png picks another file
-export const BASEMAP_URL = new URLSearchParams(location.search).get('map') || 'basemap.png';
+// baseline map, loaded at startup unless an image is already up: ?map=file if given, else a local
+// basemap.png (gitignored: your own map), else the bundled world map
+const MAP_PARAM    = new URLSearchParams(location.search).get('map');
+const BASEMAP_URLS = MAP_PARAM ? [MAP_PARAM] : ['basemap.png', 'maps/world.png'];
+
+export function loadBaseline(urls = BASEMAP_URLS) {
+  if (!urls.length) return; // nothing found: the placeholder stays up
+  loadImageUrl(urls[0], { ifEmpty: true, onFail: () => loadBaseline(urls.slice(1)) });
+}
 
 // ifEmpty: a slow baseline must not replace an image uploaded while it was loading
-export function loadImageUrl(url, { ifEmpty = false } = {}) {
+function loadImageUrl(url, { ifEmpty = false, onFail = null } = {}) {
   const img = new Image();
   img.onload = () => {
     if (ifEmpty && state.image) return;
     applyImage(img, url);
   };
-  img.onerror = () => { if (!ifEmpty) console.warn('Could not load map image:', url); };
+  img.onerror = () => {
+    if (onFail) onFail();
+    else console.warn('Could not load map image:', url);
+  };
   img.src = url;
 }
 

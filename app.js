@@ -18,7 +18,7 @@ import { renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 import { addPin, cancelRegionDraw, commitRegion, draw, seedColors, startRegionDraw } from './create.js';
 import { cancelMerge, exitVertexEdit, hideBrushCursor, vertexEdit } from './shapes.js';
-import { BASEMAP_URL, loadImageUrl, updatePlaceholder } from './image.js';
+import { loadBaseline, updatePlaceholder } from './image.js';
 import { initWorker, setWandStatus, triggerWand } from './wand.js';
 
 // DOM
@@ -195,4 +195,4 @@ if (fromShare && state.ui.shareLocked) mountAll();
 
 setMode('display');
 if (typeof lucide !== 'undefined') lucide.createIcons();
-loadImageUrl(BASEMAP_URL, { ifEmpty: true }); // missing file: the placeholder stays up
+loadBaseline();
