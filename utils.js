@@ -48,6 +48,9 @@ export function latlngDist(a, b) {
 // ring [{lat,lng}] → polygon-clipping Polygon [[[x,y],...]]
 export const ringToGeom = (ring) => [ring.map(p => [p.lng, p.lat])];
 
+// polygon-clipping MultiPolygon → rings [{lat,lng}], one per piece. Holes are dropped.
+export const geomToRings = (multi) => multi.map(([outer]) => outer.map(([lng, lat]) => ({ lat, lng })));
+
 // gap distance bridged before merging (in map units / px at scale 1)
 export const MERGE_BUFFER_PX = 4;
 

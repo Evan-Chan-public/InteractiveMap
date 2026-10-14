@@ -1,13 +1,12 @@
 // WAND — flood-fill regions: the WASM worker, its progress ticker, and turning results into regions
 
 import { state } from './state.js';
-import { generateId } from './utils.js';
 import { scheduleSave } from './persistence.js';
 import { renestAround } from './nesting.js';
 import { pushHistory } from './history.js';
 import { selectAnnotation } from './selection.js';
 import { mountRegionLayer } from './render.js';
-import { nextColor } from './create.js';
+import { newRegion } from './create.js';
 
 // DOM
 
@@ -155,15 +154,7 @@ function onWandResult({ points, simpCount, filled }) {
   }));
 
   pushHistory();
-  const region = {
-    id:       generateId(),
-    polygons: [latlngs],
-    color:    nextColor(),
-    label:    'New Region',
-    body:     '',
-    hidden:   false,
-    layerId:  state.ui.activeLayerId,
-  };
+  const region = newRegion([latlngs]);
   state.annotations.regions.push(region);
   renestAround(region);
   mountRegionLayer(region);

@@ -42,8 +42,21 @@ const REGION_COLORS = [
   '#c04aff', '#ffe04a', '#4afff0', '#ff4adf',
 ];
 let colorIndex = 0;
-export function nextColor() {
+function nextColor() {
   return REGION_COLORS[colorIndex++ % REGION_COLORS.length];
+}
+
+// a new region on the active layer; callers add it to the annotations
+export function newRegion(polygons) {
+  return {
+    id:       generateId(),
+    polygons,
+    color:    nextColor(),
+    label:    'New Region',
+    body:     '',
+    hidden:   false,
+    layerId:  state.ui.activeLayerId,
+  };
 }
 
 // loaded maps continue the colour cycle where their regions left off
@@ -85,15 +98,7 @@ export function startRegionDraw(latlng) {
 export function commitRegion() {
   if (draw.points.length < 3) { cancelRegionDraw(); return; }
   pushHistory();
-  const region = {
-    id:       generateId(),
-    polygons: [draw.points.map(p => ({ lat: p.lat, lng: p.lng }))],
-    color:    nextColor(),
-    label:    'New Region',
-    body:     '',
-    hidden:   false,
-    layerId:  state.ui.activeLayerId,
-  };
+  const region = newRegion([draw.points.map(p => ({ lat: p.lat, lng: p.lng }))]);
   state.annotations.regions.push(region);
   renestAround(region);
   cancelRegionDraw();

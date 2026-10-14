@@ -87,8 +87,8 @@ export function renderDetailPanel() {
 
   if (state.ui.mergeSource && state.ui.mergeHover
       && state.ui.mergeSource !== state.ui.mergeHover) {
-    const source = state.annotations.regions.find(r => r.id === state.ui.mergeSource);
-    const target = state.annotations.regions.find(r => r.id === state.ui.mergeHover);
+    const source = findAnnotation('region', state.ui.mergeSource);
+    const target = findAnnotation('region', state.ui.mergeHover);
     if (source && target) { renderDetailTree(null); renderMergePreview(source, target); return; }
   }
 
@@ -102,8 +102,7 @@ export function renderDetailPanel() {
     return;
   }
 
-  const list = sel.type === 'region' ? state.annotations.regions : state.annotations.pins;
-  const annotation = list.find(a => a.id === sel.id);
+  const annotation = findAnnotation(sel.type, sel.id);
   if (!annotation) { clearSelection(); return; }
 
   renderDetailTree(annotation);
@@ -215,8 +214,7 @@ function backButtonHtml() {
     return `<button id="nav-back" class="btn-back">← ${escapeHtml(layer?.name || 'Layer')}</button>`;
   }
   const prev = navStack[navStack.length - 1];
-  const list = prev.type === 'region' ? state.annotations.regions : state.annotations.pins;
-  const label = list.find(a => a.id === prev.id)?.label || 'Untitled';
+  const label = findAnnotation(prev.type, prev.id)?.label || 'Untitled';
   return `<button id="nav-back" class="btn-back">← ${escapeHtml(label)}</button>`;
 }
 

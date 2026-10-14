@@ -1,15 +1,15 @@
 // SHAPES — editing region geometry: merge, consolidate, vertex edit, brush and eraser
 
 import { layers, state } from './state.js';
-import { circlePoly, generateId, inflatePolygon, latlngDist, MERGE_BUFFER_PX, ringToGeom } from './utils.js';
+import { circlePoly, geomToRings, inflatePolygon, latlngDist, MERGE_BUFFER_PX, ringToGeom } from './utils.js';
 import { scheduleSave } from './persistence.js';
-import { orphanChildrenOf, renestAround } from './nesting.js';
+import { findAnnotation, orphanChildrenOf, renestAround } from './nesting.js';
 import { map } from './map.js';
 import { pushHistory } from './history.js';
 import { clearSelection, selectAnnotation } from './selection.js';
 import { remountRegionLayer, unmountRegion } from './render.js';
 import { refreshLayerList, refreshTree, renderDetailPanel } from './panel.js';
-import { nextColor } from './create.js';
+import { newRegion } from './create.js';
 import { setWandStatus } from './wand.js';
 
 // DOM
@@ -64,8 +64,8 @@ export function cancelMerge() {
 }
 
 export function performMerge(targetId, sourceId) {
-  const target = state.annotations.regions.find(r => r.id === targetId);
-  const source = state.annotations.regions.find(r => r.id === sourceId);
+  const target = findAnnotation('region', targetId);
+  const source = findAnnotation('region', sourceId);
   if (!target || !source) { cancelMerge(); return; }
   if (target.layerId !== source.layerId) {
     setWandStatus('Merge blocked: regions are on different layers. Move one first.');
@@ -97,8 +97,7 @@ export function performMerge(targetId, sourceId) {
   }
   if (!merged?.length) { cancelMerge(); return; }
 
-  // Each top-level component → one ring. Holes are dropped.
-  target.polygons = merged.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
+  target.polygons = geomToRings(merged);
 
   state.annotations.regions = state.annotations.regions.filter(r => r.id !== sourceId);
   unmountRegion(sourceId);
@@ -114,7 +113,7 @@ export function performMerge(targetId, sourceId) {
 
 // merge adjacent rings within a region (cleanup after duplicate fills / cascading adjacencies)
 export function consolidateRegion(regionId) {
-  const region = state.annotations.regions.find(r => r.id === regionId);
+  const region = findAnnotation('region', regionId);
   if (!region || region.polygons.length < 2) return;
   pushHistory();
 
@@ -138,7 +137,7 @@ export function consolidateRegion(regionId) {
   }
   if (!result?.length) return;
 
-  region.polygons = result.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
+  region.polygons = geomToRings(result);
   renestAround(region);
   remountRegionLayer(region);
   selectAnnotation('region', regionId);
@@ -174,7 +173,7 @@ function updateMidpointPositions(region) {
 
 export function enterVertexEdit(regionId) {
   exitVertexEdit();
-  const region = state.annotations.regions.find(r => r.id === regionId);
+  const region = findAnnotation('region', regionId);
   if (!region) return;
   vertexEdit.active   = true;
   vertexEdit.regionId = regionId;
@@ -282,39 +281,27 @@ function applyBrush(latlng, forceNew = false) {
   const circleGeom = [circlePts.map(p => [p.lng, p.lat])];
 
   let region = null;
-  let isNew  = false;
   if (!forceNew && state.ui.selected?.type === 'region') {
-    region = state.annotations.regions.find(r2 => r2.id === state.ui.selected.id);
+    region = findAnnotation('region', state.ui.selected.id);
     if (region?.layerId !== state.ui.activeLayerId) region = null;
-  }
-  if (!region) {
-    region = {
-      id:       generateId(),
-      polygons: [],
-      color:    nextColor(),
-      label:    'New Region',
-      body:     '',
-      hidden:   false,
-      layerId:  state.ui.activeLayerId,
-    };
-    state.annotations.regions.push(region);
-    isNew = true;
   }
 
   let result;
   try {
-    if (region.polygons.length === 0) {
-      result = polygonClipping.union(circleGeom);
-    } else {
-      result = polygonClipping.union(...region.polygons.map(ringToGeom), circleGeom);
-    }
+    result = polygonClipping.union(...(region?.polygons ?? []).map(ringToGeom), circleGeom);
   } catch (err) {
     console.warn('brush union failed:', err);
     return;
   }
   if (!result?.length) return;
 
-  region.polygons = result.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
+  // a new region is only added once its shape exists, so a failed union can't leave an empty one
+  const isNew = !region;
+  if (isNew) {
+    region = newRegion([]);
+    state.annotations.regions.push(region);
+  }
+  region.polygons = geomToRings(result);
   strokeTouched.add(region.id);
   remountRegionLayer(region);
   if (isNew) selectAnnotation('region', region.id);
@@ -363,7 +350,7 @@ function applyEraser(latlng) {
       return;
     }
 
-    region.polygons = result.map(comp => comp[0].map(([lng, lat]) => ({ lat, lng })));
+    region.polygons = geomToRings(result);
     strokeTouched.add(region.id);
     remountRegionLayer(region);
     scheduleSave();
@@ -379,7 +366,7 @@ function endStroke() {
   brushLastLatLng = null;
   if (strokeDeleted.size) orphanChildrenOf([...strokeDeleted]);
   for (const id of strokeTouched) {
-    const region = state.annotations.regions.find(r => r.id === id);
+    const region = findAnnotation('region', id);
     if (region) renestAround(region);
   }
   strokeTouched.clear();
