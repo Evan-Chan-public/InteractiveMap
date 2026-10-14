@@ -2,62 +2,7 @@
 
 A lightweight browser-based tool for annotating custom map images. Aims to produce a sort of... locationally nested filesystem.
 
----
-
-## Running Locally
-
-The app uses ES modules and a Web Worker, so it must be served over HTTP. Opening `index.html` directly as a `file://` URL will not work.
-
-Quick options:
-```bash
-# Python
-python3 -m http.server 8080
-
-# Node
-npx serve .
-```
-
-Then open `http://localhost:8080` in your browser.
-
-External dependencies (Leaflet, Marked, Lucide) are loaded from CDN, so an internet connection is required on first load (they may be cached after that).
-
----
-
-## Code Layout
-
-Plain ES modules, no build step. `app.js` is the entry point (mode, tools, map and keyboard events, startup); the rest:
-
-| Module | Holds |
-|---|---|
-| `state.js` | shared app state and the Leaflet layer registry |
-| `persistence.js` | localStorage save/load and sanitizing loaded data |
-| `nesting.js` | parent links, auto-nesting, tree lookups |
-| `map.js` | the Leaflet map |
-| `render.js` | drawing annotations, stacking order, what's clickable/faded |
-| `selection.js` | selection and back/up navigation |
-| `panel.js` | the right panel: layer list, details, editor, tree |
-| `layerstrip.js` | the layer chips and moving items between layers |
-| `create.js` | new pins and regions, colours, deletion |
-| `shapes.js` | merge, consolidate, vertex edit, brush, eraser |
-| `wand.js` | flood fill via the WASM worker |
-| `image.js` | map image upload, paste and baseline file |
-| `share.js` | share links: encoding and the dialog |
-| `history.js` | undo/redo |
-
-Modules import each other in cycles. That's safe because only `app.js` runs code at load time; the others just declare functions and attach listeners to their own elements.
-
----
-
-## Rebuilding the WASM Module
-
-The compiled files (`processor.js`, `processor.wasm`) are pre-built and excluded from git. If you modify `wasm/processor.cpp`, rebuild with:
-
-```bash
-cd wasm
-make
-```
-
-Requires [Emscripten](https://emscripten.org/docs/getting_started/downloads.html) installed to `~/.emsdk`.
+**Use it at [evan-chan-public.github.io/InteractiveMap](https://evan-chan-public.github.io/InteractiveMap/).** Nothing to install or sign up for: maps save in your browser as you work, and **Export** gives you a file to back one up or open it elsewhere. Leaflet, Marked and Lucide load from CDNs, so the first visit needs an internet connection.
 
 ---
 
@@ -80,7 +25,7 @@ In Design Mode, use **Upload Image** (or paste, or drop an image on the map) to 
 
 **Baseline map:** on startup the app loads, in order of preference:
 1. the file named by `?map=other.png` in the URL, if given;
-2. `basemap.png` next to `index.html` (gitignored, so it's your own local map);
+2. `basemap.png` next to `index.html`, when you run your own copy (it's gitignored, so it stays your local map);
 3. `maps/world.png`, the bundled world map.
 
 Uploading still replaces it for the session.
@@ -176,7 +121,7 @@ Click **Share** (top-right). The dialog offers two kinds of link.
 - Viewers get the map display-only. Tick **Let viewers edit** to allow Design Mode (`&edit=1`); their changes aren't saved unless they choose to keep the map.
 - A gist link always opens the gist's latest version, so updating the gist updates the map for everyone (GitHub caches it for about 5 minutes). Pasting a raw link that pins a revision still links to the latest.
 - Any `.imap.json` the browser may fetch works too: `?project=<url>`, for a file on the same site or on a host that allows cross-site requests.
-- The link points at wherever this app is running, so it only works for others once the app is hosted (a `localhost` link works only on your computer; the dialog says so).
+- The link points at wherever you're running the app, so copy it from the hosted app: a link made on a local copy (`localhost`) works only on your computer, and the dialog says so.
 - Opening a linked map never touches the viewer's own saved map. If the file can't be loaded, a message on the map says why.
 
 **Quick link** (annotations only, encoded in the URL itself):
@@ -193,7 +138,7 @@ Click **Share** (top-right). The dialog offers two kinds of link.
 
 ## Data Persistence
 
-The current map autosaves to the browser's IndexedDB after every edit: annotations, title and an uploaded image, so everything (image included) comes back on the next visit. Baseline maps aren't stored, since they're loaded from their file each time. Where IndexedDB isn't available, annotations fall back to `localStorage` as before; maps saved there by older versions are moved over automatically.
+The current map autosaves to the browser's IndexedDB after every edit: annotations, title and an uploaded image, so everything (image included) comes back on the next visit. Baseline maps aren't stored, since they're loaded from their file each time. Where IndexedDB isn't available, only the annotations are saved, to `localStorage` (not the image or title). Maps saved in `localStorage` by older versions are moved over automatically.
 
 Saved data lives in this browser only. Use **Export** to keep a copy or move a map elsewhere.
 
@@ -202,3 +147,59 @@ Saved data lives in this browser only. Use **Export** to keep a copy or move a m
 - A saved map that can't be read is left untouched: the session opens empty and doesn't save until you import a map.
 - If no image can be shown at all, the placeholder offers to discard the saved map (after confirming).
 - Several tabs on the same map: the last one to save wins.
+
+---
+
+## Running Your Own Copy
+
+### Locally
+
+The app uses ES modules and a Web Worker, so it must be served over HTTP. Opening `index.html` directly as a `file://` URL will not work.
+
+```bash
+python3 -m http.server 8080   # or: npx serve .
+```
+
+Then open `http://localhost:8080`.
+
+**Flood Region** runs on a small WebAssembly module (`processor.js` + `processor.wasm`) that isn't in the repo, so a fresh clone has to build it once (below). Everything else works without it.
+
+### Building the WASM Module
+
+```bash
+cd wasm
+make
+```
+
+Requires [Emscripten](https://emscripten.org/docs/getting_started/downloads.html) installed to `~/.emsdk`. Rebuild after changing `wasm/processor.cpp`.
+
+### Deploying
+
+Pushes to `main` deploy to GitHub Pages through `.github/workflows/pages.yml`, which builds the WASM module and publishes only what the browser needs (`index.html`, `style.css`, the scripts, `processor.wasm` and `maps/world.png`).
+
+### Code Layout
+
+Plain ES modules, no build step. `app.js` is the entry point (mode, tools, map and keyboard events, startup); the rest:
+
+| Module | Holds |
+|---|---|
+| `state.js` | shared app state and the Leaflet layer registry |
+| `persistence.js` | autosave (IndexedDB, with a `localStorage` fallback) and sanitizing loaded data |
+| `project.js` | map files: the format, export, import, opening `?gist=` / `?project=` links, the left panel's Map section |
+| `nesting.js` | parent links, auto-nesting, tree lookups |
+| `map.js` | the Leaflet map |
+| `render.js` | drawing annotations, stacking order, what's clickable, faded or hidden |
+| `selection.js` | selection and back/up navigation |
+| `panel.js` | the right panel: layer list, details, editor, tree |
+| `layerstrip.js` | the layer chips and moving items between layers |
+| `create.js` | new pins and regions, colours, deletion |
+| `shapes.js` | merge, consolidate, vertex edit, brush, eraser |
+| `wand.js` | flood fill via the WASM worker |
+| `image.js` | the map image: upload, paste, baseline file, and how it's saved |
+| `share.js` | share links: encoding and the dialog |
+| `history.js` | undo/redo |
+| `utils.js` | small shared helpers |
+
+Modules import each other in cycles. That's safe because only `app.js` runs code at load time; the others just declare functions and attach listeners to their own elements.
+
+`maps/render_world.py` regenerates the bundled world map (see [Upload a Map](#upload-a-map)).

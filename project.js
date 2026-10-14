@@ -44,7 +44,7 @@ const IMAGE_SRC  = /^(https?:\/\/|(?![a-z][\w+.-]*:))[^\s"'<>]+$/i; // http(s) o
 
 // a project object (from a file, a link or storage) → { title, image, annotations }. throws on bad input
 export async function parseProject(obj) {
-  if (!obj || typeof obj !== 'object' || obj.format !== FORMAT) throw new Error('not an Interactive Map project file');
+  if (!obj || typeof obj !== 'object' || obj.format !== FORMAT) throw new Error('not a Cairn map file');
   let version = obj.version;
   if (!Number.isInteger(version) || version < 1) throw new Error('the file has no valid format version');
   if (version > VERSION) throw new Error(`made by a newer version of the app (format ${version}); update to open it`);
@@ -247,7 +247,7 @@ function forgetLinkInAddress() {
 export function renderProjectPanel() {
   if (titleInput && document.activeElement !== titleInput) titleInput.value = state.title;
   linkNotice?.classList.toggle('hidden', state.ui.autosave || savedUnreadable);
-  document.title = state.title ? `${state.title} · Interactive Map` : 'Interactive Map';
+  document.title = state.title ? `${state.title} · Cairn` : 'Cairn';
 }
 
 export function setStatus(message, isError = false) {
@@ -263,7 +263,7 @@ document.addEventListener('savestatus', (e) => {
 
 titleInput?.addEventListener('input', () => {
   state.title = titleInput.value;
-  document.title = state.title ? `${state.title} · Interactive Map` : 'Interactive Map';
+  document.title = state.title ? `${state.title} · Cairn` : 'Cairn';
   scheduleSave();
 });
 
