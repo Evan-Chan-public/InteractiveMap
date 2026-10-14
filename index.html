@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="style.css" />
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
   <script src="https://unpkg.com/marked@14.1.3/marked.min.js"></script>
+  <script src="https://unpkg.com/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
 <body>
 
@@ -89,7 +90,7 @@
           <input id="share-url" type="text" readonly />
           <button id="share-copy">Copy</button>
         </div>
-        <p class="share-note">The map image is not included — the viewer will need to upload it.</p>
+        <p id="share-note" class="share-note"></p>
       </div>
     </div>
 

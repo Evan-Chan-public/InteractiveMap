@@ -36,6 +36,56 @@ export function ensureLayers(data) {
   return data;
 }
 
+// Share links (and anything saved from one) are untrusted: rebuild every item from known fields
+// with checked types, so ids and colours are safe to put in HTML attributes and the rest is plain data.
+const SAFE_ID    = /^[\w-]{1,64}$/;
+const HEX_COLOR  = /^#[0-9a-f]{3,8}$/i;
+const num        = (n) => Number.isFinite(n);
+const str        = (s, fallback = '') => typeof s === 'string' ? s : fallback;
+const toPoint    = (p) => p && num(p.lat) && num(p.lng) ? { lat: p.lat, lng: p.lng } : null;
+
+export function sanitizeAnnotations(data) {
+  const ids  = new Map(); // unsafe id -> replacement, so parent links still resolve
+  const id   = (v) => {
+    if (typeof v === 'string' && SAFE_ID.test(v)) return v;
+    if (!ids.has(v)) ids.set(v, generateId());
+    return ids.get(v);
+  };
+  const ref  = (v) => (v == null ? null : id(v));
+  const list = (v) => Array.isArray(v) ? v.filter(x => x && typeof x === 'object') : [];
+
+  const base = (it) => ({
+    id:           id(it.id),
+    layerId:      it.layerId == null ? undefined : id(it.layerId),
+    label:        str(it.label),
+    body:         str(it.body),
+    hidden:       it.hidden === true,
+    parentId:     ref(it.parentId),
+    parentManual: it.parentManual === true,
+  });
+  // keep "no nesting yet" visible to ensureNesting for old data
+  const nesting = (it, clean) => {
+    if (!('parentId' in it)) { delete clean.parentId; delete clean.parentManual; }
+    return clean;
+  };
+
+  return {
+    layers: list(data?.layers).map(l => ({ id: id(l.id), name: str(l.name, 'Layer') })),
+    regions: list(data?.regions).map(r => nesting(r, {
+      ...base(r),
+      color:    HEX_COLOR.test(r.color) ? r.color : '#4a9eff',
+      polygons: (Array.isArray(r.polygons) ? r.polygons : [])
+        .filter(Array.isArray)
+        .map(ring => ring.map(toPoint).filter(Boolean))
+        .filter(ring => ring.length >= 3),
+    })).filter(r => r.polygons.length), // also drops empty leftovers from a failed brush stroke
+    pins: list(data?.pins)
+      .map(p => ({ p, latlng: toPoint(p.latlng) }))
+      .filter(({ latlng }) => latlng)
+      .map(({ p, latlng }) => nesting(p, { ...base(p), latlng })),
+  };
+}
+
 export function loadAnnotations() {
   try {
     // Try v3, then v2, then v1 with migration
@@ -44,19 +94,11 @@ export function loadAnnotations() {
              || localStorage.getItem('interactiveMap.annotations.v1');
     if (!raw) return false;
     const data = JSON.parse(raw);
+    // v1: region.points (single ring) → region.polygons (array of rings)
     if (Array.isArray(data?.regions)) {
-      state.annotations.regions = data.regions.map(r => {
-        // v1: region.points (single ring) → region.polygons (array of rings)
-        if (r.points && !r.polygons) {
-          const { points, groupId, ...rest } = r;
-          return { ...rest, polygons: [points] };
-        }
-        const { groupId, ...rest } = r;
-        return rest;
-      });
+      data.regions = data.regions.map(r => r?.points && !r.polygons ? { ...r, polygons: [r.points] } : r);
     }
-    if (Array.isArray(data?.pins))   state.annotations.pins   = data.pins;
-    if (Array.isArray(data?.layers)) state.annotations.layers = data.layers;
+    Object.assign(state.annotations, sanitizeAnnotations(data));
     ensureLayers(state.annotations);
     return state.annotations.regions.length > 0 || state.annotations.pins.length > 0;
   } catch (err) {

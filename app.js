@@ -1,7 +1,9 @@
 import { state, layers, historyStack, redoStack, navStack, HISTORY_MAX } from './state.js';
 import { generateId, escapeHtml,
          circlePoly, latlngDist, ringToGeom, MERGE_BUFFER_PX, inflatePolygon } from './utils.js';
-import { flags, scheduleSave, loadAnnotations, clearSavedAnnotations, ensureLayers } from './persistence.js';
+import { flags, scheduleSave, loadAnnotations, clearSavedAnnotations, ensureLayers,
+         sanitizeAnnotations } from './persistence.js';
+import { encodeShare, decodeShare } from './share.js';
 import { childrenOf, ancestorsOf, autoParent, wouldCycle, findItem, renest, renestAround,
          orphanChildrenOf, renestAll, ensureNesting } from './nesting.js';
 
@@ -116,6 +118,7 @@ const shareDialog      = document.getElementById('share-dialog');
 const shareLock        = document.getElementById('share-lock');
 const shareUrl         = document.getElementById('share-url');
 const shareCopy        = document.getElementById('share-copy');
+const shareNote        = document.getElementById('share-note');
 const layerChips       = document.getElementById('layer-chips');
 const btnLayerAdd      = document.getElementById('layer-add');
 const btnUpload        = document.getElementById('tool-upload');
@@ -184,41 +187,36 @@ function updatePlaceholder() {
 
 let shareLocked = false; // set on load when URL hash contains a locked share
 
-function buildShareUrl(lock) {
-  const payload = { v: 1, lock, annotations: state.annotations };
-  const bytes   = new TextEncoder().encode(JSON.stringify(payload));
-  const hash    = btoa(String.fromCharCode(...bytes));
-  return `${location.origin}${location.pathname}${location.search}#${hash}`;
+// long links still work in the address bar, but chat apps and some sites cut them off
+const LONG_LINK_CHARS = 8000;
+
+async function refreshShareUrl() {
+  shareUrl.value = 'Building link…';
+  const hash = await encodeShare(state.annotations, shareLock.checked);
+  shareUrl.value = `${location.origin}${location.pathname}${location.search}#${hash}`;
+  const kb = (shareUrl.value.length / 1024).toFixed(1);
+  shareNote.textContent = (shareUrl.value.length > LONG_LINK_CHARS
+    ? `Long link (${kb} KB): some apps may cut it off. ` : `Link size ${kb} KB. `)
+    + 'The map image is not included: viewers get the baseline map if the site serves one, otherwise they upload it.';
 }
 
-function loadShareHash(hash) {
-  try {
-    const binary = atob(hash);
-    const bytes  = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const payload = JSON.parse(new TextDecoder().decode(bytes));
-    if (!payload?.annotations) return false;
-    if (Array.isArray(payload.annotations.regions)) state.annotations.regions = payload.annotations.regions;
-    if (Array.isArray(payload.annotations.pins))    state.annotations.pins    = payload.annotations.pins;
-    if (Array.isArray(payload.annotations.layers))  state.annotations.layers  = payload.annotations.layers;
-    ensureLayers(state.annotations);
-    shareLocked = !!payload.lock;
-    return true;
-  } catch {
-    return false;
-  }
+async function loadShareHash(hash) {
+  const payload = await decodeShare(hash);
+  if (!payload) return false;
+  Object.assign(state.annotations, sanitizeAnnotations(payload.annotations));
+  ensureLayers(state.annotations);
+  shareLocked = !!payload.lock;
+  return true;
 }
 
 btnShare.addEventListener('click', (e) => {
   e.stopPropagation();
   const isOpen = !shareDialog.classList.contains('hidden');
   shareDialog.classList.toggle('hidden', isOpen);
-  if (!isOpen) shareUrl.value = buildShareUrl(shareLock.checked);
+  if (!isOpen) refreshShareUrl();
 });
 
-shareLock.addEventListener('change', () => {
-  shareUrl.value = buildShareUrl(shareLock.checked);
-});
+shareLock.addEventListener('change', refreshShareUrl);
 
 shareCopy.addEventListener('click', () => {
   navigator.clipboard.writeText(shareUrl.value).then(() => {
@@ -664,7 +662,7 @@ function addPin(latlng) {
 
 function mountPinLayer(pin, single = true) {
   const marker = L.marker([pin.latlng.lat, pin.latlng.lng]).addTo(map);
-  marker.bindTooltip(pin.label || 'Pin', { direction: 'top', offset: [0, -28] });
+  marker.bindTooltip(escapeHtml(pin.label || 'Pin'), { direction: 'top', offset: [0, -28] });
   marker.on('click', (e) => {
     if (!isLive(pin)) return;
     L.DomEvent.stopPropagation(e);
@@ -677,7 +675,7 @@ function mountPinLayer(pin, single = true) {
 function updatePinLayer(pin) {
   const marker = layers.pins[pin.id];
   if (!marker) return;
-  marker.setTooltipContent(pin.label || 'Pin');
+  marker.setTooltipContent(escapeHtml(pin.label || 'Pin'));
 }
 
 // REGIONS
@@ -720,7 +718,7 @@ function renderSwatchGrid(currentColor) {
       ${swatches}
       <div class="swatch swatch-custom${!inPreset ? ' active' : ''}" id="swatch-custom-btn" title="Custom colour">…</div>
     </div>
-    <input id="edit-color-custom" type="color" value="${currentColor || '#4a9eff'}" style="display:none" />
+    <input id="edit-color-custom" type="color" value="${escapeHtml(currentColor || '#4a9eff')}" style="display:none" />
   `;
 }
 
@@ -827,7 +825,7 @@ function mountRegionLayer(region, single = true) {
       fillColor:   region.color,
       fillOpacity: 0.18,
     });
-    poly.bindTooltip(region.label || 'Region', { sticky: true });
+    poly.bindTooltip(escapeHtml(region.label || 'Region'), { sticky: true });
     group.addLayer(poly);
   }
 
@@ -881,7 +879,7 @@ function updateRegionLayer(region) {
   const group = layers.regions[region.id];
   if (!group) return;
   group.eachLayer(poly => {
-    poly.setTooltipContent(region.label || 'Region');
+    poly.setTooltipContent(escapeHtml(region.label || 'Region'));
     poly.setStyle({ color: region.color, fillColor: region.color });
   });
 }
@@ -1265,8 +1263,8 @@ function renderLayerList() {
   const pins    = state.annotations.pins.filter(p => p.layerId === layer?.id);
 
   const row = (type, a) => `
-    <div class="pin-list-item item-row${a.hidden ? ' item-hidden' : ''}" data-type="${type}" data-id="${a.id}">
-      ${type === 'region' ? `<span class="color-wheel" style="background:${a.color || '#4a9eff'}"></span>` : ''}
+    <div class="pin-list-item item-row${a.hidden ? ' item-hidden' : ''}" data-type="${type}" data-id="${escapeHtml(a.id)}">
+      ${type === 'region' ? `<span class="color-wheel" style="background:${escapeHtml(a.color || '#4a9eff')}"></span>` : ''}
       <span class="item-row-label">${escapeHtml(a.label || (type === 'region' ? 'Untitled region' : 'Untitled pin'))}</span>
       ${a.parentId ? `<span class="item-row-parent">in ${escapeHtml(findItem(a.parentId)?.label || 'Untitled')}</span>` : ''}
     </div>`;
@@ -1308,21 +1306,25 @@ function renderLayerList() {
   });
 }
 
+// descriptions can arrive in share links: markdown output is sanitized, or shown as plain text
+function bodyHtml(body) {
+  if (!body) return '<em style="color:#888">No description.</em>';
+  if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') return escapeHtml(body);
+  return DOMPurify.sanitize(marked.parse(body));
+}
+
 function renderMergePreview(source, target) {
-  const bodyHtml = target.body
-    ? (typeof marked !== 'undefined' ? marked.parse(target.body) : escapeHtml(target.body))
-    : '<em style="color:#888">No description.</em>';
   detailContent.innerHTML = `
     <div class="merge-banner">
       Click to merge into
-      <span class="color-wheel" style="background:${source.color || '#4a9eff'}"></span>
+      <span class="color-wheel" style="background:${escapeHtml(source.color || '#4a9eff')}"></span>
       <strong>${escapeHtml(source.label || 'Untitled')}</strong>
     </div>
     <h2 class="merge-target-title">
-      <span class="color-wheel" style="background:${target.color || '#4a9eff'}"></span>
+      <span class="color-wheel" style="background:${escapeHtml(target.color || '#4a9eff')}"></span>
       ${escapeHtml(target.label || 'Untitled')}
     </h2>
-    <div class="detail-body markdown-body">${bodyHtml}</div>
+    <div class="detail-body markdown-body">${bodyHtml(target.body)}</div>
   `;
 }
 
@@ -1348,14 +1350,11 @@ function bindBackButton() {
 }
 
 function renderDetailView(annotation) {
-  const bodyHtml = annotation.body
-    ? (typeof marked !== 'undefined' ? marked.parse(annotation.body) : escapeHtml(annotation.body))
-    : '<em style="color:#888">No description.</em>';
   detailContent.innerHTML = `
     ${backButtonHtml()}
     <h2 class="detail-title">${escapeHtml(annotation.label || 'Untitled')}</h2>
     <hr class="detail-divider" />
-    <div class="detail-body markdown-body">${bodyHtml}</div>
+    <div class="detail-body markdown-body">${bodyHtml(annotation.body)}</div>
   `;
   bindBackButton();
 }
@@ -1367,7 +1366,7 @@ function renderDetailEditor(annotation, type) {
     <details class="swatch-details">
       <summary class="swatch-summary">
         <span class="field-label" style="display:inline">Color</span>
-        <span class="color-dot" style="background:${annotation.color || '#4a9eff'}"></span>
+        <span class="color-dot" style="background:${escapeHtml(annotation.color || '#4a9eff')}"></span>
       </summary>
       ${renderSwatchGrid(annotation.color)}
     </details>` : '';
@@ -1383,7 +1382,7 @@ function renderDetailEditor(annotation, type) {
     <label class="field-label" for="edit-layer">Layer</label>
     <select id="edit-layer" class="field-input">
       ${state.annotations.layers.map(l => `
-        <option value="${l.id}" ${l.id === annotation.layerId ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
+        <option value="${escapeHtml(l.id)}" ${l.id === annotation.layerId ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
     </select>` : '';
 
   const parentSelect = (() => {
@@ -1395,7 +1394,7 @@ function renderDetailEditor(annotation, type) {
       .map(l => {
         const opts = state.annotations.regions
           .filter(r => r.layerId === l.id && !wouldCycle(annotation.id, r.id))
-          .map(r => `<option value="${r.id}" ${current === r.id ? 'selected' : ''}>${escapeHtml(r.label || 'Untitled')}</option>`)
+          .map(r => `<option value="${escapeHtml(r.id)}" ${current === r.id ? 'selected' : ''}>${escapeHtml(r.label || 'Untitled')}</option>`)
           .join('');
         return opts ? `<optgroup label="${escapeHtml(l.name)}">${opts}</optgroup>` : '';
       }).join('');
@@ -1541,9 +1540,9 @@ function parentInView(item) {
 
 function treeLinkHtml(type, item) {
   const dot = type === 'region'
-    ? `<span class="color-wheel" style="background:${item.color || '#4a9eff'}"></span>` : '';
+    ? `<span class="color-wheel" style="background:${escapeHtml(item.color || '#4a9eff')}"></span>` : '';
   const fallback = type === 'region' ? 'Untitled region' : 'Untitled pin';
-  return `<span class="tree-link" data-type="${type}" data-id="${item.id}">${dot}${escapeHtml(item.label || fallback)}</span>`;
+  return `<span class="tree-link" data-type="${type}" data-id="${escapeHtml(item.id)}">${dot}${escapeHtml(item.label || fallback)}</span>`;
 }
 
 // regions expand in place (<details>) when they have children of their own
@@ -1936,7 +1935,7 @@ map.on('mouseout', endStroke);
 initWorker();
 
 const hashData  = location.hash.slice(1);
-const fromShare = hashData && loadShareHash(hashData);
+const fromShare = hashData && await loadShareHash(hashData);
 if (fromShare) {
   colorIndex = state.annotations.regions.length;
   if (shareLocked) btnMode.style.display = 'none';

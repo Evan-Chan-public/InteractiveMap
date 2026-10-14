@@ -110,6 +110,9 @@ Click **Share** (top-right) to generate a URL encoding the current annotations.
 - **Lock Design Mode**: check this before copying the link to prevent the viewer from editing.
 - The map image is not included in the link. Recipients get the baseline map if the site serves one (the link keeps any `?map=`); otherwise they must upload it themselves.
 - Locked links hide the Design Mode button entirely. Unlocked links let the viewer edit freely.
+- Links are compressed; the dialog shows the link size and warns when it's long enough that some apps may cut it off. Older uncompressed links still open.
+- Everything in a link is treated as untrusted: ids, colours and coordinates are validated on load, and descriptions are sanitized before their Markdown is rendered.
+- Locking is a convenience, not access control: anyone can edit the link itself.
 
 ---
 
