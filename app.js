@@ -16,7 +16,8 @@ import { clearSelection, goUp, showLayer } from './selection.js';
 import { applyLayerVisibility, drillFocus, mountAll } from './render.js';
 import { renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
-import { addPin, cancelRegionDraw, commitRegion, draw, seedColors, startRegionDraw } from './create.js';
+import { addPin, cancelRegionDraw, commitRegion, disarmDelete, draw, isDeleteArmed, requestDelete, seedColors,
+         startRegionDraw } from './create.js';
 import { cancelMerge, exitVertexEdit, hideBrushCursor, vertexEdit } from './shapes.js';
 import { loadBaseline, updatePlaceholder } from './image.js';
 import { initWorker, setWandStatus, triggerWand } from './wand.js';
@@ -135,6 +136,12 @@ map.on('dblclick', (e) => {
   }
 });
 
+// keys inside a text field belong to the field (checkboxes, sliders and buttons don't count)
+function isTyping(el) {
+  if (el.isContentEditable || el.tagName === 'TEXTAREA') return true;
+  return el.tagName === 'INPUT' && !['checkbox', 'radio', 'range', 'button', 'color'].includes(el.type);
+}
+
 // text fields the user has typed in keep native ctrl+z (fields are rebuilt on each render)
 const typedFields = new WeakSet();
 document.addEventListener('input', (e) => {
@@ -152,9 +159,18 @@ document.addEventListener('keydown', (e) => {
     if (isUndo) undo(); else redo();
     return;
   }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && !isTyping(e.target)) {
+    const sel = state.ui.selected;
+    if (state.mode !== 'design' || !sel || draw.active || state.ui.mergeSource) return;
+    e.preventDefault();
+    requestDelete(sel.type, sel.id);
+    return;
+  }
   if (e.key !== 'Escape') return;
   // esc unwinds the innermost thing first; deselect only when nothing else was cancelled
-  const busy = draw.active || state.ui.mergeSource || vertexEdit.active || state.ui.activeTool === 'edit';
+  const busy = draw.active || state.ui.mergeSource || vertexEdit.active || state.ui.activeTool === 'edit'
+            || isDeleteArmed();
+  disarmDelete();
   if (draw.active)            cancelRegionDraw();
   if (state.ui.mergeSource)   cancelMerge();
   if (vertexEdit.active)      exitVertexEdit();

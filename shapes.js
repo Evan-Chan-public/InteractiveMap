@@ -6,7 +6,7 @@ import { scheduleSave } from './persistence.js';
 import { findAnnotation, orphanChildrenOf, renestAround } from './nesting.js';
 import { map } from './map.js';
 import { pushHistory } from './history.js';
-import { clearSelection, selectAnnotation } from './selection.js';
+import { clearSelection, selectAnnotation, selectNew } from './selection.js';
 import { remountRegionLayer, unmountRegion } from './render.js';
 import { refreshLayerList, refreshTree, renderDetailPanel } from './panel.js';
 import { newRegion } from './create.js';
@@ -304,7 +304,7 @@ function applyBrush(latlng, forceNew = false) {
   region.polygons = geomToRings(result);
   strokeTouched.add(region.id);
   remountRegionLayer(region);
-  if (isNew) selectAnnotation('region', region.id);
+  if (isNew) selectNew('region', region.id);
   scheduleSave();
 }
 

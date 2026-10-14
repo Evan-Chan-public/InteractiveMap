@@ -505,7 +505,8 @@ body {
   transition: background 0.15s, color 0.15s;
 }
 
-.btn-danger:hover {
+.btn-danger:hover,
+.btn-danger.armed {
   background: #e05555;
   color: #fff;
 }

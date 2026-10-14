@@ -10,7 +10,7 @@ import { pushHistory } from './history.js';
 import { clearSelection, goBack, navigateAnnotation, panToItem, selectAnnotation } from './selection.js';
 import { applyLayerVisibility, updatePinLayer, updateRegionLayer } from './render.js';
 import { moveToLayer } from './layerstrip.js';
-import { deleteAnnotation } from './create.js';
+import { isDeleteArmed, requestDelete } from './create.js';
 import { cancelMerge, consolidateRegion, startMerge } from './shapes.js';
 
 // DOM
@@ -285,11 +285,14 @@ function renderDetailEditor(annotation, type) {
     ? `<div class="field-label" style="margin-top:6px">${polyCount} polygon${polyCount === 1 ? '' : 's'}</div>`
     : '';
 
+  const deleteBtn = isDeleteArmed(annotation.id)
+    ? '<button id="edit-delete" class="btn-danger armed" title="Delete (Backspace)">Confirm delete</button>'
+    : '<button id="edit-delete" class="btn-danger" title="Delete (Backspace)">Delete</button>';
   const actionBtns = isRegion ? `
     <button id="edit-merge" class="btn-secondary">Merge…</button>
     ${polyCount > 1 ? `<button id="edit-consolidate" class="btn-secondary">Consolidate</button>` : ''}
-    <button id="edit-delete" class="btn-danger">Delete</button>
-  ` : `<button id="edit-delete" class="btn-danger">Delete</button>`;
+    ${deleteBtn}
+  ` : deleteBtn;
 
   detailContent.innerHTML = `
     ${backButtonHtml()}
@@ -365,7 +368,7 @@ function renderDetailEditor(annotation, type) {
   if (isRegion) bindSwatchGrid(annotation);
 
   document.getElementById('edit-delete').addEventListener('click', () => {
-    deleteAnnotation(type, annotation.id);
+    requestDelete(type, annotation.id);
   });
 
   document.getElementById('edit-merge')?.addEventListener('click', () => {
@@ -379,8 +382,25 @@ function renderDetailEditor(annotation, type) {
   });
 
   bindBackButton();
-  labelInput.focus();
-  labelInput.select();
+  if (focusLabelFor === annotation.id) {
+    focusLabelFor = null;
+    labelInput.focus();
+    labelInput.select();
+  }
+}
+
+// only new items take focus: on an existing selection, Backspace deletes instead of editing the label
+let focusLabelFor = null;
+
+export function focusLabelOnce(id) {
+  focusLabelFor = id;
+}
+
+export function showDeleteArmed(on) {
+  const btn = document.getElementById('edit-delete');
+  if (!btn) return;
+  btn.classList.toggle('armed', on);
+  btn.textContent = on ? 'Confirm delete' : 'Delete';
 }
 
 function treeLinkHtml(type, item) {

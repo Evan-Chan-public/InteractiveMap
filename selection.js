@@ -4,7 +4,7 @@ import { layers, navStack, state } from './state.js';
 import { findAnnotation, parentInView } from './nesting.js';
 import { map } from './map.js';
 import { applyInteractivity } from './render.js';
-import { renderDetailPanel } from './panel.js';
+import { focusLabelOnce, renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 
 // switch to an item's layer without dropping selection (panel / back navigation)
@@ -31,6 +31,12 @@ export function selectAnnotation(type, id) {
   state.ui.selected = { type, id };
   followToLayer(type, id);
   renderDetailPanel();
+}
+
+// a just-created item opens with its label focused, ready to name it
+export function selectNew(type, id) {
+  focusLabelOnce(id);
+  selectAnnotation(type, id);
 }
 
 export function navigateAnnotation(type, id) {

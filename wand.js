@@ -4,7 +4,7 @@ import { state } from './state.js';
 import { scheduleSave } from './persistence.js';
 import { renestAround } from './nesting.js';
 import { pushHistory } from './history.js';
-import { selectAnnotation } from './selection.js';
+import { selectNew } from './selection.js';
 import { mountRegionLayer } from './render.js';
 import { newRegion } from './create.js';
 
@@ -158,6 +158,6 @@ function onWandResult({ points, simpCount, filled }) {
   state.annotations.regions.push(region);
   renestAround(region);
   mountRegionLayer(region);
-  selectAnnotation('region', region.id);
+  selectNew('region', region.id);
   scheduleSave();
 }

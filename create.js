@@ -6,8 +6,9 @@ import { scheduleSave } from './persistence.js';
 import { orphanChildrenOf, renestAround } from './nesting.js';
 import { map } from './map.js';
 import { pushHistory } from './history.js';
-import { clearSelection, selectAnnotation } from './selection.js';
+import { clearSelection, selectNew } from './selection.js';
 import { mountPinLayer, mountRegionLayer, unmountRegion } from './render.js';
+import { showDeleteArmed } from './panel.js';
 
 // PINS
 
@@ -24,7 +25,7 @@ export function addPin(latlng) {
   state.annotations.pins.push(pin);
   renestAround(pin);
   mountPinLayer(pin);
-  selectAnnotation('pin', pin.id);
+  selectNew('pin', pin.id);
   scheduleSave();
 }
 
@@ -103,7 +104,7 @@ export function commitRegion() {
   renestAround(region);
   cancelRegionDraw();
   mountRegionLayer(region);
-  selectAnnotation('region', region.id);
+  selectNew('region', region.id);
   scheduleSave();
 }
 
@@ -117,7 +118,44 @@ export function cancelRegionDraw() {
 
 // DELETION
 
-export function deleteAnnotation(type, id) {
+// with confirmation on, the first Backspace / Delete click arms the button and a second one within
+// a few seconds deletes. the setting is a per-browser preference (left panel), on by default
+const CONFIRM_KEY = 'interactiveMap.confirmDeletes';
+const ARM_MS      = 3000;
+const confirmBox  = document.getElementById('confirm-deletes');
+
+let confirmDeletes = true;
+try { confirmDeletes = localStorage.getItem(CONFIRM_KEY) !== 'false'; } catch {}
+if (confirmBox) confirmBox.checked = confirmDeletes;
+confirmBox?.addEventListener('change', () => {
+  confirmDeletes = confirmBox.checked;
+  try { localStorage.setItem(CONFIRM_KEY, String(confirmDeletes)); } catch {}
+  disarmDelete();
+});
+
+let armed = null; // { id, timer }
+
+export const isDeleteArmed = (id) => !!armed && (id === undefined || armed.id === id);
+
+export function requestDelete(type, id) {
+  if (!confirmDeletes || armed?.id === id) {
+    disarmDelete();
+    deleteAnnotation(type, id);
+    return;
+  }
+  disarmDelete();
+  armed = { id, timer: setTimeout(disarmDelete, ARM_MS) };
+  showDeleteArmed(true);
+}
+
+export function disarmDelete() {
+  if (!armed) return;
+  clearTimeout(armed.timer);
+  armed = null;
+  showDeleteArmed(false);
+}
+
+function deleteAnnotation(type, id) {
   pushHistory();
   if (type === 'pin') {
     state.annotations.pins = state.annotations.pins.filter(p => p.id !== id);

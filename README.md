@@ -114,6 +114,9 @@ All annotations have a **label** and a **description** field. Descriptions suppo
 ### Hiding
 Individual annotations can be toggled hidden. Hidden items are invisible in Display Mode.
 
+### Deleting
+Select an item in Design Mode and press `Backspace` / `Delete`, or click **Delete** in the editor. With **Confirm deletes** on (left panel, on by default, remembered per browser), the first press arms the button and a second press or click within 3 seconds deletes; `Esc` cancels. Keys typed into a text field never delete. Newly created items open with their label focused for naming; selecting an existing item doesn't, so `Backspace` goes to the item.
+
 ### Undo / Redo
 `Ctrl+Z` / `Ctrl+Shift+Z` (or `Ctrl+Y`). Up to 50 steps of history.
 
