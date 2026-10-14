@@ -61,17 +61,25 @@ int floodFill(
 }
 
 // CONTOUR TRACE
-// Moore neighbourhood, Jacob's stopping criterion. Returns point pairs written.
+// Moore neighbourhood. Returns point pairs written.
+// Stops when the first move (start -> second pixel) is about to repeat. The simpler "back at the
+// start pixel" test can stop early or never stop on 1px spurs and borders drawn as thin lines.
 
 static const int MX[8] = { 1, 1, 0,-1,-1,-1, 0, 1 };
 static const int MY[8] = { 0,-1,-1,-1, 0, 1, 1, 1 };
+
+static int dirOf(int dx, int dy) {
+    for (int d = 0; d < 8; ++d)
+        if (MX[d] == dx && MY[d] == dy) return d;
+    return 0;
+}
 
 EMSCRIPTEN_KEEPALIVE
 int traceBoundary(
     const uint8_t* mask, int width, int height,
     float* outXY, int maxPairs
 ) {
-    // find topmost-leftmost filled pixel
+    // topmost-leftmost filled pixel: its west neighbour is outside the mask
     int startX = -1, startY = -1;
     for (int y = 0; y < height && startX < 0; ++y)
         for (int x = 0; x < width && startX < 0; ++x)
@@ -79,46 +87,41 @@ int traceBoundary(
 
     if (startX < 0) return 0;
 
-    // single pixel — check if truly isolated
-    if (mask[startY * width + startX]) {
-        outXY[0] = (float)startX;
-        outXY[1] = (float)startY;
-        bool lone = true;
-        for (int d = 0; d < 8 && lone; ++d) {
-            int nx = startX + MX[d], ny = startY + MY[d];
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height && mask[ny * width + nx])
-                lone = false;
-        }
-        if (lone) return 1;
-    }
+    auto filled = [&](int x, int y) {
+        return x >= 0 && x < width && y >= 0 && y < height && mask[y * width + x];
+    };
 
     int cx = startX, cy = startY;
-    int prevDir = 6; // approach from left; backtrack = right
+    int back = 4;                 // direction from the current pixel to the last outside pixel seen
+    int secondX = -1, secondY = -1;
     int count = 0;
-    bool first = true;
 
-    do {
-        if (count >= maxPairs) break;
+    while (count < maxPairs) {
+        // turn clockwise (decreasing index on screen) from the backtrack to the next filled pixel
+        int d = -1;
+        for (int i = 1; i <= 8; ++i) {
+            int k = ((back - i) % 8 + 8) % 8;
+            if (filled(cx + MX[k], cy + MY[k])) { d = k; break; }
+        }
+        if (d < 0) {              // lone pixel
+            outXY[0] = (float)cx;
+            outXY[1] = (float)cy;
+            return 1;
+        }
+        int nx = cx + MX[d], ny = cy + MY[d];
+        if (cx == startX && cy == startY && nx == secondX && ny == secondY) break;
+        if (secondX < 0) { secondX = nx; secondY = ny; }
+
         outXY[count * 2]     = (float)cx;
         outXY[count * 2 + 1] = (float)cy;
         ++count;
 
-        int searchStart = (prevDir + 5) % 8;
-        bool found = false;
-        for (int i = 0; i < 8; ++i) {
-            int d = (searchStart + i) % 8;
-            int nx = cx + MX[d], ny = cy + MY[d];
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height && mask[ny * width + nx]) {
-                prevDir = (d + 4) % 8;
-                cx = nx; cy = ny;
-                found = true;
-                break;
-            }
-        }
-        if (!found) break;
-        first = false;
-    } while (first || cx != startX || cy != startY);
-
+        // the outside neighbour checked just before the hit becomes the new backtrack
+        int pd = (d + 1) % 8;
+        int bx = cx + MX[pd], by = cy + MY[pd];
+        cx = nx; cy = ny;
+        back = dirOf(bx - cx, by - cy);
+    }
     return count;
 }
 
