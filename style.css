@@ -33,10 +33,12 @@
   --leather-rule:   oklch(0.45 0.045 52);
   --on-leather:     oklch(0.93 0.025 85);
   --on-leather-soft: oklch(0.80 0.035 78);
+  --danger-on-leather: oklch(0.82 0.1 35);
 
   /* pigments: gilt marks what's chosen, oxblood what needs care (focus, deleting), woad what links */
   --gilt:      oklch(0.74 0.12 80);
   --gilt-line: oklch(0.55 0.1 75);
+  --on-gilt:   oklch(0.24 0.04 50);
   --oxblood:   oklch(0.45 0.15 27);
   --woad:      oklch(0.43 0.1 258);
   --on-pigment: oklch(0.97 0.015 85);
@@ -287,7 +289,7 @@ body {
 /* the tool in hand is gilded */
 .tool-btn.active {
   background: var(--gilt);
-  color: oklch(0.24 0.04 50);
+  color: var(--on-gilt);
   border-color: color-mix(in oklch, var(--gilt), black 25%);
 }
 
@@ -321,7 +323,7 @@ body {
 }
 
 .panel-left .wand-status.error {
-  color: oklch(0.82 0.1 35);
+  color: var(--danger-on-leather);
 }
 
 .confirm-dialog {
@@ -1176,8 +1178,8 @@ body {
   background: var(--leaf-sunk);
 }
 
-.panel-left .btn-danger { color: oklch(0.82 0.1 35); border-color: oklch(0.82 0.1 35); }
-.panel-left .btn-danger:hover { background: oklch(0.82 0.1 35); color: var(--leather-deep); }
+.panel-left .btn-danger { color: var(--danger-on-leather); border-color: var(--danger-on-leather); }
+.panel-left .btn-danger:hover { background: var(--danger-on-leather); color: var(--leather-deep); }
 
 .merge-banner {
   display: flex;
@@ -1307,7 +1309,7 @@ input[type="checkbox"]:checked::before { transform: scale(1); }
 
 .panel-left input[type="checkbox"] { background: var(--leather-deep); border-color: var(--leather-rule); }
 .panel-left input[type="checkbox"]:checked { background: var(--gilt); border-color: var(--gilt); }
-.panel-left input[type="checkbox"]::before { background: oklch(0.24 0.04 50); }
+.panel-left input[type="checkbox"]::before { background: var(--on-gilt); }
 
 select.field-input {
   appearance: none;
