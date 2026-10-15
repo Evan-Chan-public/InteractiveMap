@@ -1,4 +1,4 @@
-EMCC   = $(HOME)/.emsdk/upstream/emscripten/emcc
+EMCC   = $(HOME)/.emsdk/upstream/emscripten/em++
 SRC    = processor.cpp
 TARGET = ../processor.js
 

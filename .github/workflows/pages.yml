@@ -28,11 +28,15 @@ jobs:
         uses: actions/checkout@v4
 
       # processor.js / processor.wasm are gitignored, so build them here
+      # pinned to the version the module is developed with
       - name: Set up Emscripten
         uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 5.0.7
 
+      # em++, not emcc: processor.cpp needs the C++ runtime linked in
       - name: Build WASM
-        run: make -C wasm EMCC=emcc
+        run: make -C wasm EMCC=em++
 
       # publish only what the browser needs (no wasm/ sources, README, scripts)
       - name: Stage site
