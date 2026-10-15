@@ -361,6 +361,14 @@ body {
   max-width: calc(100% - 320px); /* leave room for mode/share cluster on the right */
 }
 
+/* phones: the strip takes its own row under the mode buttons instead of squeezing beside them */
+@media (max-width: 640px) {
+  #layer-strip {
+    top: 54px;
+    max-width: calc(100% - 64px);
+  }
+}
+
 #layer-chips {
   display: flex;
   gap: 4px;
@@ -497,11 +505,25 @@ body {
 .label-above .place-label { bottom: calc(100% + 5px); left: 50%; transform: translateX(-50%); text-align: center; }
 .label-below .place-label { top: calc(100% + 5px);    left: 50%; transform: translateX(-50%); text-align: center; }
 
-/* no free spot: the mark stays and its name shows on hover */
+/* no free spot: the mark stays and its name shows on hover or keyboard focus */
 .place-mark.label-culled .place-label { visibility: hidden; }
-.place-mark.label-culled:hover .place-label { visibility: visible; }
+.place-mark.label-culled:focus-visible .place-label { visibility: visible; }
 
-.place-mark.leaflet-interactive:hover { color: var(--map-ink-hover); }
+/* only where hovering exists: on touch the colour would stick after a tap */
+@media (hover: hover) {
+  .place-mark.label-culled:hover .place-label { visibility: visible; }
+  .place-mark.leaflet-interactive:hover { color: var(--map-ink-hover); }
+}
+
+/* keyboard focus: a dashed oxblood ring about the mark, drawn like a surveyor's circle */
+.place-mark:focus { outline: none; }
+.place-mark:focus-visible { color: var(--map-ink-hover); }
+.place-mark:focus-visible svg {
+  border-radius: 50%;
+  outline: 1.5px dashed var(--map-ink-hover);
+  outline-offset: 3px;
+}
+.place-mark.is-selected:focus-visible svg { outline-offset: 7px; } /* outside the gilt ring */
 
 /* selected: a gilt ring about the mark and a gilt rule under the name */
 .place-mark.is-selected svg {
@@ -878,6 +900,11 @@ body {
 }
 
 .mark-option:hover { background: var(--btn-hover); }
+
+.mark-option:focus-visible {
+  outline: 2px solid var(--map-gilt);
+  outline-offset: 2px;
+}
 
 .mark-option.active {
   --map-halo: var(--btn-bg);

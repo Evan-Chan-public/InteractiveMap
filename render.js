@@ -73,6 +73,34 @@ function styleItem(type, item, ix) {
     el?.classList.toggle('drill-frame', frame);
     el?.classList.toggle('is-selected', selected);
   }
+  if (type === 'pin') stylePinAccess(itemElements('pin', item.id)[0], item, dim, selected);
+}
+
+// pins are buttons named by their place (the lettered name may be hidden by labels.js); faded
+// ones can't be used, so they leave the tab order
+function stylePinAccess(el, pin, dim, selected) {
+  if (!el) return;
+  el.tabIndex = dim ? -1 : 0;
+  el.setAttribute('aria-label', pin.label || 'Untitled');
+  if (selected) el.setAttribute('aria-current', 'true');
+  else el.removeAttribute('aria-current');
+}
+
+// a click on a pin, or Enter / Space on a focused one
+function activatePin(pin) {
+  if (!isLive(pin)) return false;
+  selectAnnotation('pin', pin.id);
+  return true;
+}
+
+function pinAtElement(el) {
+  const icon = el?.closest?.('.place-mark');
+  return icon ? state.annotations.pins.find(p => layers.pins[p.id]?.getElement() === icon) : null;
+}
+
+export function activatePinElement(el) {
+  const pin = pinAtElement(el);
+  return pin ? activatePin(pin) : false;
 }
 
 export function applyInteractivity() {
@@ -94,9 +122,7 @@ const pinIcon = (pin) => L.divIcon({
 export function mountPinLayer(pin, single = true) {
   const marker = L.marker([pin.latlng.lat, pin.latlng.lng], { icon: pinIcon(pin), riseOnHover: true }).addTo(map);
   marker.on('click', (e) => {
-    if (!isLive(pin)) return;
-    L.DomEvent.stopPropagation(e);
-    selectAnnotation('pin', pin.id);
+    if (activatePin(pin)) L.DomEvent.stopPropagation(e);
   });
   layers.pins[pin.id] = marker;
   if (single) { styleItem('pin', pin, interactivity()); scheduleLabelLayout(); }

@@ -46,19 +46,33 @@ function renderSwatchGrid(currentColor) {
   `;
 }
 
+// a radio group: one tab stop, arrow keys move the choice
 function bindMarkPicker(pin) {
-  const picker = document.getElementById('mark-picker');
-  picker.addEventListener('click', (e) => {
-    const option = e.target.closest('[data-mark]');
-    if (!option || option.dataset.mark === pin.mark) return;
+  const picker  = document.getElementById('mark-picker');
+  const options = [...picker.querySelectorAll('.mark-option')];
+  const choose  = (option) => {
+    if (option.dataset.mark === (pin.mark ?? DEFAULT_MARK)) return;
     pushHistory();
     pin.mark = option.dataset.mark;
-    picker.querySelectorAll('.mark-option').forEach(o => {
+    options.forEach(o => {
       o.classList.toggle('active', o === option);
       o.setAttribute('aria-checked', o === option);
+      o.tabIndex = o === option ? 0 : -1;
     });
     updatePinLayer(pin);
     scheduleSave();
+  };
+  picker.addEventListener('click', (e) => {
+    const option = e.target.closest('[data-mark]');
+    if (option) choose(option);
+  });
+  picker.addEventListener('keydown', (e) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const next = options[(options.indexOf(document.activeElement) + step + options.length) % options.length];
+    next.focus();
+    choose(next);
   });
 }
 
@@ -267,8 +281,8 @@ function renderDetailEditor(annotation, type) {
     <span class="field-label">Mark</span>
     <div id="mark-picker" class="mark-picker" role="radiogroup" aria-label="Mark">
       ${Object.entries(PIN_MARKS).map(([key, m]) => `
-        <button class="mark-option${mark === key ? ' active' : ''}" data-mark="${key}"
-                role="radio" aria-checked="${mark === key}" title="${m.title}">${markSvg(key, 16)}</button>`).join('')}
+        <button class="mark-option${mark === key ? ' active' : ''}" data-mark="${key}" tabindex="${mark === key ? 0 : -1}"
+                role="radio" aria-checked="${mark === key}" aria-label="${m.title}" title="${m.title}">${markSvg(key, 16)}</button>`).join('')}
     </div>`;
 
   const mergeBanner = (isRegion && state.ui.mergeSource === annotation.id)

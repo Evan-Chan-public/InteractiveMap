@@ -39,6 +39,7 @@ Pins are lettered onto the map like places on an old map: a small inked mark wit
 
 - **Add Pin** tool: click anywhere on the map (including on top of regions) to place a pin.
 - Click a pin (its mark or its name) to select it and view/edit its label and description in the detail panel. The selected pin gets a gilt ring and underline.
+- From the keyboard, `Tab` moves between the pins you can use (faded ones are skipped), a dashed ring shows which has focus, and `Enter` or `Space` selects it. Screen readers announce each pin by name.
 - **Mark** (editor): a dot, a ring or a cairn. It's saved with the pin.
 - Pins on faded layers show only their mark, so other layers don't crowd the map with names.
 - **Names don't collide.** Each name sits to the right of its mark, or to the left, above or below when that's taken or would run off screen; a name with no free spot is left off until you zoom in (hover its mark to read it). Names on lower layers are placed first, so zooming out keeps the broad places and thins the detail. The selected pin always shows its name. Long names wrap onto several lines.

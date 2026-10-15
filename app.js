@@ -13,7 +13,7 @@ import { fetchLinkedFile, linkedFile, readShareHash, showBanner } from './share.
 import { map } from './map.js';
 import { redo, undo } from './history.js';
 import { clearSelection, goUp, showLayer } from './selection.js';
-import { applyLayerVisibility, drillFocus } from './render.js';
+import { activatePinElement, applyLayerVisibility, drillFocus } from './render.js';
 import { renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 import { addPin, cancelRegionDraw, commitRegion, disarmDelete, draw, isDeleteArmed, requestDelete,
@@ -133,6 +133,11 @@ map.on('click', (e) => {
 // typeface has loaded (names change width)
 map.on('zoomend moveend resize', scheduleLabelLayout);
 document.fonts?.ready.then(scheduleLabelLayout);
+
+// pins are buttons: Enter or Space selects the focused one (Leaflet only makes them focusable)
+map.getContainer().addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && activatePinElement(e.target)) e.preventDefault();
+});
 
 map.on('dblclick', (e) => {
   if (state.mode !== 'design') return;
