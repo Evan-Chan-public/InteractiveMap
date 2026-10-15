@@ -22,40 +22,43 @@ import { cancelMerge, exitVertexEdit, hideBrushCursor, vertexEdit } from './shap
 import { initWorker, setWandStatus, triggerWand } from './wand.js';
 import { openDocument, openSaved } from './project.js';
 import { lettersLoaded, scheduleLabelLayout } from './labels.js';
+import { isFolded, isMapOpen, renderFlap, setFolded, setMapOpen } from './flap.js';
 
 // DOM
 
 const toolsPanel       = document.getElementById('tools-panel');
 const btnMode          = document.getElementById('btn-mode');
-const btnTools         = document.getElementById('btn-tools');
-const btnToolsClose    = document.getElementById('tools-close');
 const btnRegion        = document.getElementById('tool-region');
 const btnPin           = document.getElementById('tool-pin');
 const btnWand          = document.getElementById('tool-wand');
 const btnBrush         = document.getElementById('tool-brush');
 const btnEraser        = document.getElementById('tool-eraser');
 const btnEdit          = document.getElementById('tool-edit');
-const wandOptions      = document.getElementById('wand-options');
-const brushControls    = document.getElementById('brush-controls');
+const btnMap           = document.getElementById('tool-map');
+const btnFlapDone      = document.getElementById('flap-done');
+const btnFlapFold      = document.getElementById('flap-fold');
 
-// MODE
+// MODE — one switch, Display on one side and Design on the other
+
+let linkShown = false;
 
 function setMode(mode) {
   if (mode === 'design' && state.ui.shareLocked) return;
   state.mode = mode;
-  btnTools.classList.toggle('hidden', mode !== 'design');
-  if (mode === 'design') {
-    toolsPanel.classList.remove('hidden');
-    btnMode.textContent = 'Switch to Display Mode';
-  } else {
-    setToolsOpen(false);
-    toolsPanel.classList.add('hidden');
-    btnMode.textContent = 'Switch to Design Mode';
+  const design = mode === 'design';
+  toolsPanel.classList.toggle('hidden', !design);
+  document.body.classList.toggle('designing', design);
+  btnMode.setAttribute('aria-checked', design);
+  if (!design) {
     setActiveTool(null);
+    setMap(false);
     cancelRegionDraw();
+  } else if (!linkShown && !document.getElementById('link-notice').classList.contains('hidden')) {
+    linkShown = true; // a linked map isn't saved: say so once, the first time the cover opens
+    setMap(true);
   }
   const sel = state.ui.selected;
-  if (sel && mode === 'display' && findAnnotation(sel.type, sel.id)?.hidden) { // can't stay selected once hidden
+  if (sel && !design && findAnnotation(sel.type, sel.id)?.hidden) { // can't stay selected once hidden
     navStack.length = 0;
     state.ui.selected = null;
   }
@@ -68,33 +71,8 @@ btnMode.addEventListener('click', () => {
   setMode(state.mode === 'design' ? 'display' : 'design');
 });
 
-// PHONES — the tools rail is a drawer over the map, opened from the Tools tab
-
-const phone = window.matchMedia('(max-width: 640px)');
-
-function setToolsOpen(open) {
-  document.body.classList.toggle('tools-open', open);
-  btnTools.setAttribute('aria-expanded', open);
-}
-
-btnTools.addEventListener('click', () => {
-  setToolsOpen(true);
-  toolsPanel.querySelector('button, input')?.focus();
-});
-
-btnToolsClose.addEventListener('click', () => {
-  setToolsOpen(false);
-  btnTools.focus();
-});
-
-phone.addEventListener('change', () => setToolsOpen(false));
-
-// a tap on the dimmed map behind the drawer lands on <body> (the scrim is its ::after)
-document.body.addEventListener('click', (e) => {
-  if (e.target === document.body && document.body.classList.contains('tools-open')) setToolsOpen(false);
-});
-
-// TOOLS
+// TOOLS — a roll of pockets; the tool in hand is gilded and its flap folds out beside the roll.
+// the map file has a pocket too, and shares the flap
 
 const TOOL_BTNS = {
   region: btnRegion,
@@ -105,14 +83,26 @@ const TOOL_BTNS = {
   edit:   btnEdit,
 };
 
+// each tool's letter picks it up (and puts it down again)
+const TOOL_KEYS = Object.fromEntries(Object.entries(TOOL_BTNS).map(([name, btn]) => [btn.dataset.key.toLowerCase(), name]));
+
+// on a phone the roll is a dock along the bottom edge, and the leaf sits on top of it
+const phone = window.matchMedia('(max-width: 640px)');
+
+function measureDock() {
+  document.body.style.setProperty('--dock-height', `${phone.matches ? toolsPanel.offsetHeight : 0}px`);
+}
+new ResizeObserver(measureDock).observe(toolsPanel);
+phone.addEventListener('change', measureDock);
+
 function setActiveTool(tool) {
   state.ui.activeTool = tool;
+  if (tool && isMapOpen()) setMap(false);
 
-  Object.values(TOOL_BTNS).forEach(b => b?.classList.remove('active'));
-  if (tool) TOOL_BTNS[tool]?.classList.add('active');
-
-  wandOptions?.classList.toggle('hidden', tool !== 'wand');
-  brushControls?.classList.toggle('hidden', tool !== 'brush' && tool !== 'eraser');
+  for (const [name, b] of Object.entries(TOOL_BTNS)) {
+    b.classList.toggle('active', name === tool);
+    b.setAttribute('aria-pressed', name === tool);
+  }
 
   const isPaint = tool === 'brush' || tool === 'eraser';
   if (!isPaint) hideBrushCursor();
@@ -124,22 +114,37 @@ function setActiveTool(tool) {
   if (tool !== 'region') cancelRegionDraw();
   if (tool !== 'wand')   setWandStatus('');
   if (tool !== 'edit')   exitVertexEdit();
+  renderFlap();
 }
 
-// on a phone, picking a tool closes the drawer so the map is free to use it
-function wireToolBtn(btn, name) {
-  btn?.addEventListener('click', () => {
-    setActiveTool(state.ui.activeTool === name ? null : name);
-    if (phone.matches && state.ui.activeTool) setToolsOpen(false);
-  });
+function setMap(open) {
+  if (open && state.ui.activeTool) setActiveTool(null);
+  btnMap.classList.toggle('active', open);
+  btnMap.setAttribute('aria-pressed', open);
+  setMapOpen(open);
 }
 
-wireToolBtn(btnRegion, 'region');
-wireToolBtn(btnPin,    'pin');
-wireToolBtn(btnWand,   'wand');
-wireToolBtn(btnBrush,  'brush');
-wireToolBtn(btnEraser, 'eraser');
-wireToolBtn(btnEdit,   'edit');
+function toggleTool(name) {
+  setActiveTool(state.ui.activeTool === name ? null : name);
+}
+
+for (const [name, b] of Object.entries(TOOL_BTNS)) b.addEventListener('click', () => toggleTool(name));
+
+// opening the map file puts the cursor in its name (not on phones, where that raises the keyboard)
+btnMap.addEventListener('click', () => {
+  setMap(!isMapOpen());
+  if (isMapOpen() && !phone.matches) document.getElementById('project-title').focus();
+});
+
+// folding the flap down to a tab keeps the tool in hand and frees the map's corner
+btnFlapFold.addEventListener('click', () => setFolded(!isFolded()));
+
+// putting the tool down hands focus back to its pocket
+btnFlapDone.addEventListener('click', () => {
+  const pocket = TOOL_BTNS[state.ui.activeTool] ?? btnMap;
+  if (state.ui.activeTool) setActiveTool(null); else setMap(false);
+  pocket.focus();
+});
 
 // MAP EVENTS
 
@@ -228,8 +233,22 @@ document.addEventListener('keydown', (e) => {
     requestDelete(sel.type, sel.id);
     return;
   }
+  const toolKey = TOOL_KEYS[key];
+  if (toolKey && state.mode === 'design' && !e.metaKey && !e.ctrlKey && !e.altKey && !isTyping(e.target)
+      && !draw.active && !e.repeat) {
+    e.preventDefault();
+    toggleTool(toolKey);
+    return;
+  }
+  // [ and ] shrink and grow the brush (and the eraser, which shares its size)
+  if ((e.key === '[' || e.key === ']') && ['brush', 'eraser'].includes(state.ui.activeTool) && !isTyping(e.target)) {
+    const size = document.getElementById('brush-size');
+    size.value = +size.value + (e.key === ']' ? 5 : -5);
+    size.dispatchEvent(new Event('input'));
+    return;
+  }
   if (e.key !== 'Escape') return;
-  if (document.body.classList.contains('tools-open')) { setToolsOpen(false); btnTools.focus(); return; }
+  if (isMapOpen() && !state.ui.activeTool) { setMap(false); btnMap.focus(); return; }
   // esc unwinds the innermost thing first; deselect only when nothing else was cancelled
   const busy = draw.active || state.ui.mergeSource || vertexEdit.active || state.ui.activeTool === 'edit'
             || isDeleteArmed();
@@ -238,7 +257,13 @@ document.addEventListener('keydown', (e) => {
   if (state.ui.mergeSource)   cancelMerge();
   if (vertexEdit.active)      exitVertexEdit();
   if (state.ui.activeTool === 'edit') setActiveTool(null);
-  if (busy || !state.ui.selected || e.target.isContentEditable) return; // layer rename handles its own esc
+  if (busy || e.target.isContentEditable) return; // layer rename handles its own esc
+  if (!state.ui.selected) {
+    // nothing left to let go of: the tool in hand is put down
+    const pocket = TOOL_BTNS[state.ui.activeTool];
+    if (pocket && !typedFields.has(e.target)) { setActiveTool(null); pocket.focus(); }
+    return;
+  }
   if (typedFields.has(e.target)) { e.target.blur(); return; }       // first esc leaves a field you typed in
   if (state.mode === 'display') goUp(); else clearSelection();
 });

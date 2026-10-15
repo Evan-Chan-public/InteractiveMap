@@ -2,7 +2,7 @@
 
 A lightweight browser-based tool for annotating custom map images. Aims to produce a sort of... locationally nested filesystem.
 
-**Use it at [cairn-atlas.github.io](https://cairn-atlas.github.io/).** Nothing to install or sign up for: maps save in your browser as you work, and **Export** gives you a file to back one up or open it elsewhere. Leaflet, Marked and Lucide load from CDNs, so the first visit needs an internet connection.
+**Use it at [cairn-atlas.github.io](https://cairn-atlas.github.io/).** Nothing to install or sign up for: maps save in your browser as you work, and **Export** gives you a file to back one up or open it elsewhere. Leaflet, Marked and the fonts load from CDNs, so the first visit needs an internet connection.
 
 ---
 
@@ -16,8 +16,9 @@ From the keyboard, `Tab` reaches the regions and pins you can use; a dashed oxbl
 Clicking a region drills into it: the region keeps its painted border, its children become clickable (whichever layer they're on), and everything outside it is veiled. Selecting something with no children keeps its siblings clickable. `Esc` or the back button (named after the parent) goes up a level; at the top level it returns to browsing the active layer. Clicking the map outside the area you're in (or outside the selected item) deselects and returns to the outermost layer; clicks inside it that miss a child do nothing. Clicking a layer chip leaves the drill-down and browses that layer. Hidden regions are skipped, so their children appear under the next visible ancestor.
 
 ### Design Mode
-The tools sit in the left panel. On a phone they're a drawer: open it with **Tools** (top right); picking a tool, tapping the map behind it or `Esc` closes it.
-Toggle with the **Design Mode** button (top-right). Exposes all editing tools and lets you create, modify, and delete annotations.
+Switch with the **Display / Design** switch (top right). Design Mode exposes the editing tools and lets you create, modify, and delete annotations.
+
+The tools are a narrow roll down the left edge (on a phone, a row along the bottom). Pick one by clicking its pocket or pressing its letter: `P` pin, `R` region, `F` flood, `V` vertices, `B` brush, `E` eraser (never while typing). The tool in hand turns gilt and a flap opens beside the roll with how to use it here, its settings and its keys; **Put down**, its pocket or its letter again puts it down. The flap's **«** folds it down to a tab to free the map's corner, keeping the tool in hand. The **Map** pocket at the foot of the roll holds the map file (see below); a dot on it means its flap has news.
 
 ---
 
@@ -70,7 +71,7 @@ All annotations have a **label** and a **description** field. Descriptions suppo
 - **Eye toggles** declutter your own view while editing: an eye on each row of the right panel's list hides that item, and an eye on each layer chip hides the whole layer. They only apply in Design Mode, aren't saved, aren't part of undo, and never change what viewers see. Selecting a hidden item (from the list or the tree) or creating something on a hidden layer shows it again; the eraser leaves hidden regions alone. Opening another map shows everything again.
 
 ### Deleting
-Select an item in Design Mode and press `Backspace` / `Delete`, or click **Delete** in the editor. With **Confirm deletes** on (left panel, on by default, remembered per browser), the first press arms the button and a second press or click within 3 seconds deletes; `Esc` cancels. Keys typed into a text field never delete. Newly created items open with their label focused for naming; selecting an existing item doesn't, so `Backspace` goes to the item.
+Select an item in Design Mode and press `Backspace` / `Delete`, or click **Delete** in the editor. With **Confirm deletes** on (Map flap, on by default, remembered per browser), the first press arms the button and a second press or click within 3 seconds deletes; `Esc` cancels. Keys typed into a text field never delete. Newly created items open with their label focused for naming; selecting an existing item doesn't, so `Backspace` goes to the item.
 
 ### Undo / Redo
 `Ctrl+Z` / `Ctrl+Shift+Z` (or `Ctrl+Y`). Up to 50 steps of history.
@@ -97,7 +98,7 @@ Every region and pin can have a parent region on another layer, forming a tree.
 
 ### Map Files
 
-A map (title, layers, regions, pins and the map image) can be saved as one `.imap.json` file. The **Map** section at the top of the left panel (Design Mode) holds the title and the **Export** / **Import** buttons; you can also drop a `.imap.json` file anywhere on the map to open it.
+A map (title, layers, regions, pins and the map image) can be saved as one `.imap.json` file. The **Map** pocket at the foot of the tool roll (Design Mode) opens the map's flap: its title, **Upload image** and the **Export** / **Import** buttons; you can also drop a `.imap.json` file anywhere on the map to open it.
 
 - **Export** downloads `<title>.imap.json`. The image is embedded, so the file opens anywhere; the bundled world map (`maps/…`) is stored as a reference instead, since it ships with the app.
 - **Import** replaces the current map. If the current map has content you're asked first, with an option to export it before replacing. Undo history starts fresh with the opened map.
@@ -123,7 +124,7 @@ Format (version 1, plain JSON):
 Click **Share** (top-right). The dialog offers two kinds of link.
 
 **Link to a map file** (recommended; includes the image, any size):
-1. **Export** the map (left panel).
+1. **Export** the map (Map flap).
 2. Create a gist at [gist.github.com](https://gist.github.com) (a *secret* gist is fine: it's unlisted but viewable by anyone with the link) and drop the `.imap.json` file into it.
 3. Paste the gist's address into the Share dialog and copy the link it builds: `…/?gist=you/abc123`.
 
@@ -137,11 +138,11 @@ Click **Share** (top-right). The dialog offers two kinds of link.
 
 - **Lock Design Mode**: check this before copying the link to prevent the viewer from editing.
 - The map image is not included in the link. Recipients get the baseline map if the site serves one (the link keeps any `?map=`); otherwise they must upload it themselves.
-- Locked links hide the Design Mode button entirely. Unlocked links let the viewer edit freely.
+- Locked links hide the Display / Design switch entirely. Unlocked links let the viewer edit freely.
 - Links are compressed; the dialog shows the link size and warns when it's long enough that some apps may cut it off. Older uncompressed links still open.
 - Everything in a link is treated as untrusted: ids, colours and coordinates are validated on load, and descriptions are sanitized before their Markdown is rendered.
 - Locking is a convenience, not access control: anyone can edit the link itself.
-- A shared map opens separately from your own: unlocked links can be edited, but nothing is saved (a notice in the left panel says so) until you click **Keep as my map**, which replaces your saved map.
+- A shared map opens separately from your own: unlocked links can be edited, but nothing is saved (a notice in the Map flap says so; it opens by itself the first time you switch to Design Mode) until you click **Keep as my map**, which replaces your saved map.
 
 ---
 
@@ -152,7 +153,7 @@ The current map autosaves to the browser's IndexedDB after every edit: annotatio
 Saved data lives in this browser only. Use **Export** to keep a copy or move a map elsewhere.
 
 - The map's own image is kept even when something else is on screen: opening with `?map=…`, or a fallback to the baseline because the image couldn't load, never replaces the saved image.
-- The image and the annotations are written separately, so if the image can't be stored (e.g. storage is full) the annotations still save, and the left panel says the image wasn't saved until it is.
+- The image and the annotations are written separately, so if the image can't be stored (e.g. storage is full) the annotations still save, and the Map flap says the image wasn't saved until it is (and its pocket shows a red dot).
 - A saved map that can't be read is left untouched: the session opens empty and doesn't save until you import a map.
 - If no image can be shown at all, the placeholder offers to discard the saved map (after confirming).
 - Several tabs on the same map: the last one to save wins.
@@ -194,13 +195,14 @@ Plain ES modules, no build step. `app.js` is the entry point (mode, tools, map a
 |---|---|
 | `state.js` | shared app state and the Leaflet layer registry |
 | `persistence.js` | autosave (IndexedDB, with a `localStorage` fallback) and sanitizing loaded data |
-| `project.js` | map files: the format, export, import, opening `?gist=` / `?project=` links, the left panel's Map section |
+| `project.js` | map files: the format, export, import, opening `?gist=` / `?project=` links, the Map flap |
 | `nesting.js` | parent links, auto-nesting, tree lookups |
 | `map.js` | the Leaflet map |
 | `render.js` | drawing annotations, stacking order, what's clickable, faded or hidden |
 | `labels.js` | placing pin names so they don't collide, thinned by layer |
 | `selection.js` | selection and back/up navigation |
 | `panel.js` | the right panel: layer list, details, editor, tree |
+| `flap.js` | the tool roll's flap: the tool in hand (or the map file), how to use it, its settings and keys |
 | `layerstrip.js` | the layer chips and moving items between layers |
 | `create.js` | new pins and regions, colours, deletion |
 | `shapes.js` | merge, consolidate, vertex edit, brush, eraser |

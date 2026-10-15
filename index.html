@@ -17,85 +17,88 @@
 <body>
   <h1 id="app-title" class="visually-hidden">Cairn</h1>
 
-  <!-- Left panel: design tools (hidden in display mode) -->
-  <aside id="tools-panel" class="panel panel-left hidden" aria-label="Tools">
-    <div class="panel-header rail-header">
-      <span class="wordmark" aria-hidden="true">Cairn</span>
-      <button id="tools-close" class="panel-close" aria-label="Close tools" title="Close tools"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+  <!-- Design tools: a roll of pockets; the chosen one folds out a flap with just its settings
+       (hidden in display mode) -->
+  <aside id="tools-panel" class="tool-roll hidden" aria-label="Tools">
+    <span class="roll-mark" aria-hidden="true">C</span>
+
+    <div class="roll-pockets" role="group" aria-label="Drawing tools">
+      <button id="tool-pin" class="pocket" aria-pressed="false" aria-keyshortcuts="P" aria-label="Add Pin" data-tip="Add Pin" data-key="P">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg><span class="pocket-key" aria-hidden="true">P</span>
+      </button>
+      <span class="roll-sep" aria-hidden="true"></span>
+      <button id="tool-region" class="pocket" aria-pressed="false" aria-keyshortcuts="R" aria-label="Add Region" data-tip="Add Region" data-key="R">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></svg><span class="pocket-key" aria-hidden="true">R</span>
+      </button>
+      <button id="tool-wand" class="pocket" aria-pressed="false" aria-keyshortcuts="F" aria-label="Flood Region" data-tip="Flood Region" data-key="F">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></svg><span class="pocket-key" aria-hidden="true">F</span>
+      </button>
+      <button id="tool-edit" class="pocket" aria-pressed="false" aria-keyshortcuts="V" aria-label="Edit Vertices" data-tip="Edit Vertices" data-key="V">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z"/><path d="m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18"/><path d="m2.3 2.3 7.286 7.286"/><circle cx="11" cy="11" r="2"/></svg><span class="pocket-key" aria-hidden="true">V</span>
+      </button>
+      <span class="roll-sep" aria-hidden="true"></span>
+      <button id="tool-brush" class="pocket" aria-pressed="false" aria-keyshortcuts="B" aria-label="Brush" data-tip="Brush" data-key="B">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m14.622 17.897-10.68-2.913"/><path d="M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z"/><path d="M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15"/></svg><span class="pocket-key" aria-hidden="true">B</span>
+      </button>
+      <button id="tool-eraser" class="pocket" aria-pressed="false" aria-keyshortcuts="E" aria-label="Eraser" data-tip="Eraser" data-key="E">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg><span class="pocket-key" aria-hidden="true">E</span>
+      </button>
     </div>
 
-    <div class="tool-group">
-      <label class="field-label" for="project-title">Map</label>
-      <input id="project-title" type="text" class="field-input" placeholder="Untitled map" maxlength="200" />
-      <div class="tool-row">
-        <button id="project-export" class="tool-btn" title="Download this map (annotations + image) as a .imap.json file">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Export
-        </button>
-        <button id="project-import" class="tool-btn" title="Open a .imap.json map file (or drop one on the map)">
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg> Import
-        </button>
+    <button id="tool-map" class="pocket pocket-map" aria-pressed="false" aria-label="Map file" data-tip="Map file" aria-controls="tool-flap">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
+    </button>
+
+    <!-- the flap: the chosen tool's name, how to use it, its settings and its keys -->
+    <section id="tool-flap" class="flap hidden" aria-labelledby="flap-title">
+      <div class="flap-head">
+        <h2 id="flap-title" class="flap-title"></h2>
+        <button id="flap-fold" class="flap-fold" aria-controls="tool-flap" aria-expanded="true" aria-label="Fold the flap away (the tool stays in hand)" title="Fold away: the tool stays in hand"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg></button>
       </div>
-      <input type="file" id="project-input" accept=".json,application/json" hidden />
-      <div id="link-notice" class="link-notice hidden">
-        Opened from a link: changes aren't saved.
-        <button id="keep-map" class="btn-link">Keep as my map</button>
+      <hr class="flap-rule" />
+      <p id="flap-howto" class="flap-howto"></p>
+
+      <div id="wand-options" class="flap-part hidden">
+        <label class="field-label" for="wand-tolerance">Tolerance <span id="wand-tolerance-val">30</span></label>
+        <input id="wand-tolerance" type="range" min="1" max="120" value="30" class="field-range" />
+        <div id="wand-status" class="wand-status" role="status"></div>
+        <button id="wand-cancel" class="btn-danger hidden">Cancel</button>
       </div>
-      <div id="project-status" class="wand-status" role="status"></div>
-    </div>
 
-    <div class="tool-group">
-      <button id="tool-upload" class="tool-btn" title="Upload map image">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg> Upload Image
-      </button>
-      <input type="file" id="upload-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden />
-    </div>
+      <div id="brush-controls" class="flap-part hidden">
+        <label class="field-label" for="brush-size">Size <span id="brush-size-val">30</span> px</label>
+        <input id="brush-size" type="range" min="5" max="150" value="30" class="field-range" />
+      </div>
 
-    <div class="tool-group">
-      <button id="tool-pin" class="tool-btn" title="Place a pin">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg> Add Pin
-      </button>
-    </div>
+      <div id="map-sheet" class="flap-part hidden">
+        <label class="field-label" for="project-title">Name</label>
+        <input id="project-title" type="text" class="field-input" placeholder="Untitled map" maxlength="200" />
+        <div id="link-notice" class="link-notice hidden">
+          Opened from a link: changes aren't saved.
+          <button id="keep-map" class="btn-link">Keep as my map</button>
+        </div>
+        <div class="flap-actions">
+          <button id="tool-upload" class="btn-secondary">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg> Upload image
+          </button>
+          <input type="file" id="upload-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden />
+          <button id="project-export" class="btn-secondary" title="Download this map (annotations + image) as a .imap.json file">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Export
+          </button>
+          <button id="project-import" class="btn-secondary" title="Open a .imap.json map file (or drop one on the map)">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg> Import
+          </button>
+          <input type="file" id="project-input" accept=".json,application/json" hidden />
+        </div>
+        <div id="project-status" class="wand-status" role="status"></div>
+        <label class="field-toggle" title="Ask for a second Backspace / click before deleting">
+          <input type="checkbox" id="confirm-deletes" checked /> Confirm deletes
+        </label>
+      </div>
 
-    <div class="tool-group">
-      <button id="tool-region" class="tool-btn" title="Draw a region polygon">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></svg> Add Region
-      </button>
-      <button id="tool-wand" class="tool-btn" title="Flood-fill a region from a click">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></svg> Flood Region
-      </button>
-      <button id="tool-edit" class="tool-btn" title="Edit vertices of selected region">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z"/><path d="m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18"/><path d="m2.3 2.3 7.286 7.286"/><circle cx="11" cy="11" r="2"/></svg> Edit Vertices
-      </button>
-    </div>
-
-    <div class="tool-group">
-      <button id="tool-brush" class="tool-btn" title="Paint brush — drag to add to selected region">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m14.622 17.897-10.68-2.913"/><path d="M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z"/><path d="M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15"/></svg> Brush
-      </button>
-      <button id="tool-eraser" class="tool-btn" title="Eraser — drag to subtract from regions">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg> Eraser
-      </button>
-    </div>
-
-    <div class="tool-group hidden" id="wand-options">
-      <label class="field-label" for="wand-tolerance">Tolerance <span id="wand-tolerance-val">30</span></label>
-      <input id="wand-tolerance" type="range" min="1" max="120" value="30" class="field-range" />
-      <div id="wand-status" class="wand-status" role="status"></div>
-      <button id="wand-cancel" class="btn-danger hidden">Cancel</button>
-    </div>
-
-    <div class="tool-group hidden" id="brush-controls">
-      <label class="field-label" for="brush-size">Brush size <span id="brush-size-val">30</span>px</label>
-      <input id="brush-size" type="range" min="5" max="150" value="30" class="field-range" />
-    </div>
-
-    <div class="tool-group">
-      <label class="field-toggle" title="Ask for a second Backspace / click before deleting">
-        <input type="checkbox" id="confirm-deletes" checked /> Confirm deletes
-      </label>
-    </div>
-
-    <!-- Future tool groups (filtering, etc.) will slot in here -->
+      <dl id="flap-keys" class="flap-keys"></dl>
+      <button id="flap-done" class="btn-secondary flap-done">Put down</button>
+    </section>
   </aside>
 
   <!-- Main map canvas -->
@@ -111,8 +114,10 @@
     <!-- Mode toggle + share (top-right corner of map) -->
     <div id="mode-toggle">
       <div>
-        <button id="btn-tools" class="hidden" aria-controls="tools-panel" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/></svg> Tools</button>
-        <button id="btn-mode">Switch to Design Mode</button>
+        <button id="btn-mode" role="switch" aria-checked="false" aria-label="Design Mode">
+          <span class="mode-half" data-mode="display"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg> Display</span>
+          <span class="mode-half" data-mode="design"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"/><path d="M16 8 2 22"/><path d="M17.5 15H9"/></svg> Design</span>
+        </button>
         <button id="btn-share" title="Get a share link">Share</button>
       </div>
       <div id="share-dialog" class="hidden">

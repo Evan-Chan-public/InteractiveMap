@@ -9,6 +9,7 @@ import { clearSelection, followToLayer } from './selection.js';
 import { applyInteractivity, applyZOrder, remountRegionLayer, toggleLayerView, unmountRegion } from './render.js';
 import { refreshLayerList } from './panel.js';
 import { cancelMerge } from './shapes.js';
+import { renderFlap } from './flap.js';
 
 // DOM
 
@@ -19,6 +20,7 @@ const btnLayerAdd      = document.getElementById('layer-add');
 
 // focusTarget: after a re-render, put the keyboard back on this layer's chip ('name' | 'eye')
 export function renderLayerStrip(focusTarget = null) {
+  renderFlap(); // the flap names the open layer
   layerChips.innerHTML = '';
   const editable = state.mode === 'design';
   const onlyOne  = state.annotations.layers.length === 1;

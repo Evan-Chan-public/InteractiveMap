@@ -8,8 +8,9 @@
    map lying open between them. Light is vellum by daylight; dark is "peat by firelight" */
 
 :root {
-  --panel-width:  220px;
   --detail-width: clamp(300px, 32vw, 420px);
+  --flap-width:   260px;
+  --flap-tucked:  40px;
 
   --font-ui:      'Alegreya', 'Iowan Old Style', Georgia, serif;
   --font-label:   'Alegreya SC', 'Alegreya', Georgia, serif;
@@ -184,16 +185,6 @@ body {
 .panel-right.is-list .panel-header { display: none; }
 .panel-right .panel-header { justify-content: flex-end; }
 
-/* the rail: peat leather, lettered in vellum */
-.panel-left {
-  width: var(--panel-width);
-  overflow-y: auto; /* the tool groups outgrow short windows */
-  background: var(--grain), linear-gradient(90deg, var(--leather-deep), var(--leather) 14px, var(--leather));
-  color: var(--on-leather);
-  border-right: 1px solid var(--leather-deep);
-  --focus: var(--gilt);
-}
-
 /* the leaf: vellum, worn a little at the edge */
 .panel-right {
   width: var(--detail-width);
@@ -218,19 +209,6 @@ body {
   flex-shrink: 0;
 }
 
-.rail-header {
-  border-bottom-color: var(--leather-rule);
-  color: var(--on-leather-soft);
-}
-
-.wordmark {
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 400;
-  letter-spacing: 0.02em;
-  color: var(--gilt);
-}
-
 .panel-close {
   display: inline-flex;
   align-items: center;
@@ -246,62 +224,312 @@ body {
 }
 
 .panel-close:hover { background: var(--leaf-sunk); border-color: var(--rule); }
-.rail-header .panel-close { display: none; } /* the rail only closes where it's a drawer (phones) */
-.rail-header .panel-close:hover { background: var(--leather-raised); border-color: var(--leather-rule); }
 
 .hidden {
   display: none !important;
 }
 
-/* TOOL BUTTONS (on the leather) */
+/* THE TOOL ROLL — a strip of peat leather with a stamped pocket per tool. The tool in hand is
+   gilded, and its flap folds out over the map's corner with just that tool's settings */
 
-.tool-group {
+.tool-roll {
+  position: relative;
+  z-index: 1001; /* the flap lies over the map and its floating controls */
+  flex-shrink: 0;
+  width: 64px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 12px;
-  border-bottom: 1px solid var(--leather-rule);
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 12px;
+  background: var(--grain), linear-gradient(90deg, var(--leather-deep), var(--leather) 10px, var(--leather));
+  color: var(--on-leather);
+  border-right: 1px solid var(--leather-deep);
+  --focus: var(--gilt);
 }
 
-.tool-btn {
+.roll-mark {
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 44px;
+  color: var(--gilt);
+}
+
+.roll-pockets {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 9px;
-  min-height: 36px;
-  padding: 7px 11px;
+  gap: 6px;
+  margin-bottom: auto; /* the map file's pocket sits at the foot of the roll */
+}
+
+.roll-sep {
+  width: 28px;
+  height: 1px;
+  margin: 4px 0;
+  background: var(--leather-rule);
+}
+
+/* a pocket: raised leather with a pressed lower lip, the tool's letter blind-stamped in its corner */
+.pocket {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
   background: var(--leather-raised);
   color: var(--on-leather);
   border: 1px solid var(--leather-rule);
-  border-radius: 3px;
-  font-size: 15px;
-  text-align: left;
+  border-radius: 4px;
+  box-shadow: inset 0 -2px 0 oklch(0.2 0.03 45 / 0.5), inset 0 1px 0 oklch(1 0 0 / 0.06);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s var(--ease-ink);
 }
 
-.tool-btn .icon { opacity: 0.9; }
+.pocket .icon { width: 20px; height: 20px; }
 
-.tool-btn:hover {
+.pocket:hover {
   background: color-mix(in oklch, var(--leather-raised), var(--on-leather) 9%);
   border-color: color-mix(in oklch, var(--leather-rule), var(--on-leather) 20%);
 }
 
-/* the tool in hand is gilded */
-.tool-btn.active {
+.pocket:active { transform: translateY(1px); box-shadow: inset 0 1px 2px oklch(0.15 0.03 45 / 0.5); }
+
+.pocket-key {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--on-leather-soft);
+  text-shadow: 0 1px 0 var(--leather-deep);
+}
+
+/* the tool in hand is gilded, and points at its flap */
+.pocket.active {
   background: var(--gilt);
   color: var(--on-gilt);
   border-color: color-mix(in oklch, var(--gilt), black 25%);
+  box-shadow: inset 0 -2px 0 color-mix(in oklch, var(--gilt), black 28%);
 }
 
-.tool-row {
+.pocket.active .pocket-key { color: var(--on-gilt); text-shadow: none; }
+
+.flap-open .pocket.active::before {
+  content: '';
+  position: absolute;
+  left: calc(100% + 2px);
+  top: 50%;
+  border: 7px solid transparent;
+  border-left-color: var(--gilt);
+  transform: translateY(-50%);
+}
+
+/* a pocket's name (and letter) on hover or keyboard focus, lettered on the leather */
+.pocket::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 50%;
+  z-index: 2;
+  padding: 4px 9px;
+  background: var(--leather-deep);
+  color: var(--on-leather);
+  border: 1px solid var(--leather-rule);
+  border-radius: 3px;
+  box-shadow: var(--shadow-tab);
+  font-size: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-4px, -50%);
+  transition: opacity 0.15s, transform 0.2s var(--ease-ink);
+}
+
+.pocket[data-key]::after { content: attr(data-tip) "  ·  " attr(data-key); }
+
+.pocket:hover::after, .pocket:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, -50%);
+  transition-delay: 0.35s;
+}
+
+.pocket:focus-visible::after { transition-delay: 0s; }
+.flap-open .pocket.active::after { display: none; } /* the flap already names it */
+
+/* the map file's pocket carries a mark when its flap has news: woad for a link, oxblood for trouble */
+.tool-roll:has(#link-notice:not(.hidden)) .pocket-map:not(.active)::before,
+.tool-roll:has(#project-status.error:not(:empty)) .pocket-map:not(.active)::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--woad);
+  box-shadow: 0 0 0 2px var(--leather-raised);
+}
+
+.tool-roll:has(#project-status.error:not(:empty)) .pocket-map:not(.active)::before { background: var(--oxblood); }
+
+/* THE FLAP — a vellum leaf hinged at the roll's edge */
+
+.flap {
+  position: absolute;
+  left: calc(100% + 1px); /* clear of the roll's edge */
+  top: 56px; /* a leaf the roll's height, below the layer tabs (which stay where they are) */
+  bottom: 0;
+  width: var(--flap-width);
+  overflow-y: auto;
+  padding: 16px 20px 18px;
+  background: var(--grain), var(--leaf);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-width: 1px 1px 0 0;
+  box-shadow: 6px 0 16px -10px oklch(0.3 0.04 50 / 0.45);
+  transform-origin: left center;
+  animation: flap-open 0.4s var(--ease-ink);
+  --focus: var(--oxblood);
+}
+
+@keyframes flap-open {
+  from { opacity: 0; transform: perspective(900px) rotateY(-14deg); }
+}
+
+.flap-head {
   display: flex;
-  gap: 4px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.tool-row .tool-btn {
-  flex: 1;
+.flap-fold {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  margin: -2px -8px 0 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
+
+.flap-fold:hover { background: var(--leaf-sunk); border-color: var(--rule); color: var(--ink); }
+
+/* folded: the leaf tucks into a strip by the roll, lettered with the tool's name; anywhere on it
+   unfolds it */
+.flap.is-folded {
+  width: var(--flap-tucked);
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.flap.is-folded:hover { background: var(--grain), var(--leaf-raised); }
+.flap.is-folded > :not(.flap-head) { display: none; }
+.flap.is-folded .flap-head { flex-direction: column; align-items: center; gap: 12px; }
+.flap.is-folded .flap-title { writing-mode: vertical-rl; font-size: 17px; margin: 0; }
+.flap.is-folded .flap-fold { margin: 0; }
+.flap.is-folded .flap-fold svg { transform: scaleX(-1); }
+
+/* on a desk the zoom sits bottom-left; it moves clear of the leaf while one is out */
+@media (min-width: 641px) {
+  .leaflet-top.leaflet-left { transition: transform 0.4s var(--ease-ink); }
+  .flap-open .leaflet-top.leaflet-left { transform: translateX(var(--flap-width)); }
+  .flap-folded .leaflet-top.leaflet-left { transform: translateX(var(--flap-tucked)); }
+}
+
+.flap-title {
+  font-family: var(--font-label);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+}
+
+.flap-rule {
+  height: 8px;
+  margin: 0 0 12px;
+  border: none;
+  background: var(--gilt-line);
+  -webkit-mask: var(--knot) repeat-x left center / 24px 8px;
+          mask: var(--knot) repeat-x left center / 24px 8px;
+  opacity: 0.85;
+}
+
+.flap-howto {
+  font-size: 15px;
+  line-height: 1.55;
+  margin-bottom: 14px;
+  text-wrap: pretty;
+}
+
+.flap-part {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.flap-part .field-label:first-child { margin-top: 0; }
+.flap .field-range { accent-color: var(--gilt-line); }
+
+.flap-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.flap-actions .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.flap-actions #tool-upload { grid-column: 1 / -1; }
+
+.flap-keys {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.flap-keys kbd {
+  font-family: var(--font-ui);
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 0 6px;
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--leaf-raised);
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+}
+
+.flap-done { margin: 0; }
+
+/* gestures in the keys list are written out; only real keys get a plate */
+.flap-keys dt { font-style: italic; color: var(--ink); white-space: nowrap; }
+
+.flap .wand-status:empty { display: none; }
 
 /* MAP FILE */
 
@@ -320,10 +548,6 @@ body {
 
 .wand-status.error {
   color: var(--oxblood);
-}
-
-.panel-left .wand-status.error {
-  color: var(--danger-on-leather);
 }
 
 .confirm-dialog {
@@ -382,7 +606,7 @@ body {
 
 /* FLOATING CONTROLS — small vellum tabs laid on the map */
 
-#btn-mode, #btn-share, #btn-tools, #layer-add, .layer-chip,
+#btn-mode, #btn-share, #layer-add, .layer-chip,
 .leaflet-bar, #share-dialog, .map-banner {
   background: var(--leaf);
   color: var(--ink);
@@ -421,7 +645,7 @@ body {
   gap: 6px;
 }
 
-#btn-mode, #btn-share, #btn-tools {
+#btn-mode, #btn-share {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -432,9 +656,35 @@ body {
   transition: background 0.15s;
 }
 
-#btn-mode:hover, #btn-share:hover, #btn-tools:hover {
-  background: var(--leaf-sunk);
+#btn-share:hover { background: var(--leaf-sunk); }
+
+/* the mode switch: Display and Design side by side, the open one gilded */
+#btn-mode {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
 }
+
+.mode-half {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: stretch;
+  padding: 0 12px;
+  font-weight: 500;
+  transition: background 0.25s var(--ease-ink), color 0.25s var(--ease-ink);
+}
+
+.mode-half + .mode-half { border-left: 1px solid var(--rule-strong); }
+
+#btn-mode[aria-checked="false"] .mode-half[data-mode="display"],
+#btn-mode[aria-checked="true"] .mode-half[data-mode="design"] {
+  background: var(--gilt);
+  color: var(--on-gilt);
+}
+
+#btn-mode[aria-checked="false"]:hover .mode-half[data-mode="design"],
+#btn-mode[aria-checked="true"]:hover .mode-half[data-mode="display"] { background: var(--leaf-sunk); }
 
 #share-dialog {
   padding: 12px;
@@ -531,7 +781,7 @@ body {
 #layer-strip {
   position: absolute;
   top: 12px;
-  left: 56px; /* clear Leaflet's zoom control */
+  left: 12px;
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -539,10 +789,12 @@ body {
   max-width: calc(100% - 340px); /* leave room for mode/share cluster on the right */
 }
 
-/* phones: the strip takes its own row under the mode buttons instead of squeezing beside them */
+/* phones: the strip takes its own row under the mode buttons instead of squeezing beside them,
+   clear of the zoom, which stays top-left there (the tool dock owns the bottom edge) */
 @media (max-width: 640px) {
   #layer-strip {
     top: 58px;
+    left: 56px;
     max-width: calc(100% - 68px);
   }
 }
@@ -653,6 +905,12 @@ body {
 .leaflet-bar a.leaflet-disabled { background: transparent; color: var(--rule-strong); }
 
 .leaflet-container .leaflet-control-zoom { margin: 12px 0 0 12px; }
+
+/* on a desk the zoom sits bottom-left, leaving the top-left corner to the layer tabs */
+@media (min-width: 641px) {
+  .leaflet-top.leaflet-left { top: auto; bottom: 0; }
+  .leaflet-container .leaflet-control-zoom { margin: 0 0 12px 12px; }
+}
 
 .leaflet-container a.leaflet-control-zoom-in:focus-visible,
 .leaflet-container a.leaflet-control-zoom-out:focus-visible {
@@ -1052,7 +1310,6 @@ body {
   margin-top: 8px;
 }
 
-.panel-left .field-label { color: var(--on-leather-soft); margin-top: 0; }
 
 .field-hint {
   font-family: var(--font-ui);
@@ -1082,13 +1339,6 @@ body {
   outline: none;
   border-color: var(--focus);
   box-shadow: 0 0 0 1px var(--focus);
-}
-
-/* fields on the leather read as vellum slips */
-.panel-left .field-input {
-  background: var(--leaf);
-  border-color: var(--leather-deep);
-  --focus: var(--gilt);
 }
 
 .field-textarea {
@@ -1216,7 +1466,6 @@ body {
   margin-top: 2px;
 }
 
-.panel-left .wand-status { color: var(--on-leather-soft); }
 
 .btn-secondary {
   min-height: 32px;
@@ -1237,8 +1486,6 @@ body {
   background: var(--leaf-sunk);
 }
 
-.panel-left .btn-danger { color: var(--danger-on-leather); border-color: var(--danger-on-leather); }
-.panel-left .btn-danger:hover { background: var(--danger-on-leather); color: var(--leather-deep); }
 
 .merge-banner {
   display: flex;
@@ -1366,9 +1613,6 @@ input[type="checkbox"]::before {
 input[type="checkbox"]:checked { background: var(--oxblood); border-color: var(--oxblood); }
 input[type="checkbox"]:checked::before { transform: scale(1); }
 
-.panel-left input[type="checkbox"] { background: var(--leather-deep); border-color: var(--leather-rule); }
-.panel-left input[type="checkbox"]:checked { background: var(--gilt); border-color: var(--gilt); }
-.panel-left input[type="checkbox"]::before { background: var(--on-gilt); }
 
 select.field-input {
   appearance: none;
@@ -1629,15 +1873,15 @@ select.field-input {
 .leaflet-pane > svg path.draw-line   { stroke: var(--map-ink); stroke-opacity: 0.9; }
 .leaflet-pane > svg path.brush-cursor { stroke: var(--map-halo); stroke-opacity: 1; filter: drop-shadow(0 0 1px var(--map-ink)); }
 
-/* PHONES — the map keeps the whole screen: the leaf rises from below as a sheet, the rail is a
-   drawer opened from the Tools tab */
+/* PHONES — the map keeps the whole screen: the leaf rises from below as a sheet, and in Design
+   Mode the tool roll lies along the bottom edge as a dock, its flap a short leaf above the pockets */
 
 @media (max-width: 640px) {
   .panel-right {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
+    bottom: var(--dock-height, 0px); /* sits on the tool dock in Design Mode */
     z-index: 1100;
     width: auto;
     max-height: 48dvh;
@@ -1655,53 +1899,90 @@ select.field-input {
   }
   .panel-right:not(.hidden) { animation: sheet-open 0.4s var(--ease-ink); }
 
-  .panel-left {
+  .tool-roll {
     position: fixed;
-    top: 0;
-    bottom: 0;
     left: 0;
-    z-index: 1200;
-    width: min(270px, 86vw);
-    box-shadow: 4px 0 24px oklch(0 0 0 / 0.35);
-    transform: translateX(-105%);
-    visibility: hidden;
-    transition: transform 0.3s var(--ease-ink), visibility 0s 0.3s;
-  }
-
-  body.tools-open .panel-left {
-    transform: none;
-    visibility: visible;
-    transition: transform 0.3s var(--ease-ink);
-  }
-
-  .rail-header .panel-close { display: inline-flex; }
-
-  /* the map dims behind the open drawer; tapping it closes the drawer */
-  body.tools-open::after {
-    content: '';
-    position: fixed;
-    inset: 0;
+    right: 0;
+    bottom: 0;
     z-index: 1150;
-    background: oklch(0.2 0.03 50 / 0.35);
-    animation: ink-fade 0.3s ease;
+    width: auto;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "flap flap" "pockets map";
+    align-items: center;
+    column-gap: 6px;
+    padding: 0 8px env(safe-area-inset-bottom);
+    background: var(--grain), linear-gradient(180deg, var(--leather), var(--leather-deep));
+    border-right: none;
+    border-top: 1px solid var(--leather-deep);
   }
 
-  #btn-mode, #btn-share, #btn-tools { font-size: 14px; padding: 6px 10px; }
-  #detail-content { padding: 12px 16px 20px; }
-}
+  .roll-mark, .pocket-key, .pocket::after, .flap-open .pocket.active::before { display: none; }
 
-@media (min-width: 641px) {
-  #btn-tools { display: none !important; }
+  .roll-pockets {
+    grid-area: pockets;
+    flex-direction: row;
+    gap: 4px;
+    margin: 0;
+    padding: 6px 0;
+    overflow-x: auto;
+  }
+
+  .roll-sep { width: 1px; height: 28px; margin: 0 2px; }
+  .pocket { width: 44px; height: 44px; }
+  .pocket-map { grid-area: map; }
+
+  /* the flap: a short leaf rising above the pockets, its title and Put down on one line */
+  .flap {
+    grid-area: flap;
+    position: static;
+    width: auto;
+    max-height: 42dvh;
+    margin: 0 -8px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    column-gap: 10px;
+    padding: 10px 16px 12px;
+    border-width: 1px 0 0;
+    border-radius: 10px 10px 0 0;
+    box-shadow: var(--shadow-sheet);
+    animation: sheet-open 0.35s var(--ease-ink);
+  }
+
+  .flap > * { grid-column: 1 / -1; }
+  .flap-head { grid-column: 1; align-items: center; }
+  .flap-title { font-size: 20px; margin: 0; }
+  .flap-fold { margin: 0; }
+
+  /* the sheet folds down: its arrows point down to fold and up to unfold */
+  .flap-fold svg { transform: rotate(-90deg); }
+  .flap.is-folded .flap-fold svg { transform: rotate(90deg); }
+
+  /* folded on a phone: just the title line, with unfold and Put down */
+  .flap.is-folded { width: auto; padding: 8px 16px; cursor: default; }
+  .flap.is-folded .flap-head { flex-direction: row; gap: 8px; }
+  .flap.is-folded .flap-title { writing-mode: horizontal-tb; font-size: 20px; }
+  .flap.is-folded .flap-done { display: inline-flex; }
+  .flap-done { grid-column: 2; grid-row: 1; }
+  .flap-rule { margin: 8px 0 10px; }
+  .flap-howto { margin-bottom: 8px; }
+  .flap-part { margin-bottom: 4px; }
+
+  #btn-share { font-size: 14px; padding: 6px 10px; }
+  .mode-half { font-size: 14px; padding: 0 10px; }
+  #detail-content { padding: 12px 16px 20px; }
 }
 
 /* fingers: every control at least 44px tall */
 @media (pointer: coarse) {
-  #btn-mode, #btn-share, #btn-tools, #layer-add { min-height: 44px; min-width: 44px; }
+  #btn-mode, #btn-share, #layer-add { min-height: 44px; min-width: 44px; }
   .layer-chip-name { min-height: 44px; }
   .layer-chip-eye, .layer-chip-close { width: 36px; height: 44px; margin-right: 0; }
   .leaflet-touch .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; }
   .panel-close, .row-eye, .layer-move button { width: 44px; height: 44px; }
-  .item-row-main, .tool-btn, .pin-list-summary, .swatch-summary { min-height: 44px; }
+  .item-row-main, .pin-list-summary, .swatch-summary { min-height: 44px; }
+  .flap-keys { display: none; } /* no keyboard to press them on */
   .tree-link { min-height: 40px; }
   .btn-secondary, .btn-danger { min-height: 44px; }
 }
@@ -1710,8 +1991,8 @@ select.field-input {
   .place-label, .region-name span, .leaflet-pane > svg path.region-outline { transition: none; }
   #layer-strip, #mode-toggle > div, .leaflet-control-zoom { animation: ink-fade 0.3s ease both; animation-delay: 0s; }
   .panel-right:not(.hidden) { animation: ink-fade 0.2s ease; }
-  .panel-left { transition: visibility 0s; }
-  body.tools-open .panel-left { transition: none; }
+  .flap { animation: ink-fade 0.2s ease; }
+  .pocket, .pocket::after, .leaflet-top.leaflet-left { transition: none; }
   .swatch, .pin-list-summary::before, .tree-node > summary::before { transition: none; }
 }
 

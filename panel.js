@@ -13,6 +13,7 @@ import { applyLayerVisibility, hiddenInView, toggleItemView, updatePinLayer, upd
 import { moveLayer, moveToLayer } from './layerstrip.js';
 import { isDeleteArmed, requestDelete } from './create.js';
 import { cancelMerge, consolidateRegion, startMerge } from './shapes.js';
+import { renderFlap } from './flap.js';
 
 // DOM
 
@@ -116,6 +117,7 @@ function bindSwatchGrid(annotation) {
 
 export function renderDetailPanel() {
   const sel = state.ui.selected;
+  renderFlap(); // the flap names the selected region
 
   if (state.ui.mergeSource && state.ui.mergeHover
       && state.ui.mergeSource !== state.ui.mergeHover) {
