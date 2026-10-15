@@ -1,0 +1,54 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; don't cancel one that's running.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # only the org repo publishes; the personal repo just holds the source
+    if: github.repository == 'cairn-atlas/cairn-atlas.github.io'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # processor.js / processor.wasm are gitignored, so build them here
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v16
+
+      - name: Build WASM
+        run: make -C wasm EMCC=emcc
+
+      # publish only what the browser needs (no wasm/ sources, README, scripts)
+      - name: Stage site
+        run: |
+          mkdir _site
+          cp index.html style.css *.js processor.wasm _site/
+          mkdir _site/maps && cp maps/world.png _site/maps/
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
