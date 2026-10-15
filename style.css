@@ -34,7 +34,6 @@
   --leather-rule:   oklch(0.45 0.045 52);
   --on-leather:     oklch(0.93 0.025 85);
   --on-leather-soft: oklch(0.80 0.035 78);
-  --danger-on-leather: oklch(0.82 0.1 35);
 
   /* pigments: gilt marks what's chosen, oxblood what needs care (focus, deleting), woad what links */
   --gilt:      oklch(0.74 0.12 80);
