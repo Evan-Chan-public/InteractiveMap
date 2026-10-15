@@ -11,6 +11,7 @@
 
 import { layers, state } from './state.js';
 import { map } from './map.js';
+import { isPicked } from './selection.js';
 
 const MARK   = 7;  // half a mark's size, px
 const GAP    = 5;  // mark to name; matches the .label-* offsets in style.css
@@ -180,7 +181,7 @@ function layoutRegionNames(taken, marks, size) {
       && !taken.some(t => overlaps(box, t)) && !marks.some(m => overlaps(box, m));
     n.shown = fits;
     if (fits) taken.push(box);
-    writes.push([n, fits, fs, region.id === state.ui.selected?.id]);
+    writes.push([n, fits, fs, isPicked(region.id)]);
   }
   for (const [n, fits, fs, selected] of writes) {
     const el = n.el;

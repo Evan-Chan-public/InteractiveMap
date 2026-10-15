@@ -15,6 +15,7 @@ export const state = {
   ui: {
     activeTool:    null, // 'region' | 'pin' | 'wand' | 'brush' | 'eraser' | 'edit' | null
     selected:      null, // { type: 'region'|'pin', id }
+    picked:        [],   // [{ type, id }]: two or more items gathered with shift-click (Design Mode); selected is then null
     filter:        null, // future: { regionId }
     mergeSource:   null, // region id being used as merge source
     mergeHover:    null, // region id currently hovered as merge candidate

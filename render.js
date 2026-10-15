@@ -4,7 +4,7 @@ import { layers, state } from './state.js';
 import { escapeHtml, markSvg } from './utils.js';
 import { childrenInView, countInView, findAnnotation, parentInView } from './nesting.js';
 import { map } from './map.js';
-import { clearSelection, selectAnnotation } from './selection.js';
+import { clearSelection, isPicked, selectAnnotation, togglePicked } from './selection.js';
 import { refreshLayerList, renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 import { enterVertexEdit, performMerge } from './shapes.js';
@@ -70,7 +70,7 @@ function washElements(id) {
 function styleItem(type, item, ix) {
   const frame    = ix.focus?.id === item.id;
   const dim      = !frame && !ix.isLive(item);
-  const selected = state.ui.selected?.id === item.id;
+  const selected = isPicked(item.id);
   const els      = type === 'pin' ? itemElements(type, item.id) : [...itemElements(type, item.id), ...washElements(item.id)];
   for (const el of els) {
     el?.classList.toggle('layer-dim', dim);
@@ -107,10 +107,14 @@ function stylePinAccess(el, pin, dim, selected) {
   else el.removeAttribute('aria-current');
 }
 
+// Design Mode with no tool in hand: shift (or ⌘ / ctrl) adds to the selection or takes away from it
+const gathers = (ev) => state.mode === 'design' && !state.ui.activeTool && !!(ev?.shiftKey || ev?.metaKey || ev?.ctrlKey);
+
 // a click on a pin, or Enter / Space on a focused one
-function activatePin(pin) {
+function activatePin(pin, ev) {
   if (!isLive(pin)) return false;
-  selectAnnotation('pin', pin.id);
+  if (gathers(ev)) togglePicked('pin', pin.id);
+  else selectAnnotation('pin', pin.id);
   return true;
 }
 
@@ -144,11 +148,11 @@ export function peekFadedMark(x, y) {
   peeked = hit;
 }
 
-export function activateMapElement(el) {
+export function activateMapElement(el, ev) {
   const pin = pinAtElement(el);
-  if (pin) return activatePin(pin);
+  if (pin) return activatePin(pin, ev);
   const region = regionAtElement(el);
-  return region ? activateRegion(region) : false;
+  return region ? activateRegion(region, ev) : false;
 }
 
 // a region reached by keyboard shows its name, as hovering does
@@ -166,7 +170,7 @@ export function regionFocusChanged(el, focused) {
 }
 
 // a click on a region, or Enter / Space on a focused one
-function activateRegion(region) {
+function activateRegion(region, ev) {
   // creation tools and faded items pass the click through to the map
   if (['pin', 'region', 'wand'].includes(state.ui.activeTool)) return false;
   if (!isLive(region)) return false;
@@ -174,9 +178,21 @@ function activateRegion(region) {
     performMerge(state.ui.mergeSource, region.id);
     return true;
   }
+  if (gathers(ev)) { togglePicked('region', region.id); return true; }
   selectAnnotation('region', region.id);
   if (state.ui.activeTool === 'edit') enterVertexEdit(region.id);
   return true;
+}
+
+// what select all and a shift-drag box can gather: the live items on the map (inside bounds, when
+// given: pins by their point, regions wholly)
+export function liveItems(bounds = null) {
+  const ix = interactivity();
+  const ok = (it) => ix.isLive(it) && ix.focus?.id !== it.id && !offMap(it);
+  const regions = state.annotations.regions.filter(r => ok(r) && layers.regions[r.id]
+    && (!bounds || bounds.contains(layers.regions[r.id].getBounds())));
+  const pins = state.annotations.pins.filter(p => ok(p) && (!bounds || bounds.contains([p.latlng.lat, p.latlng.lng])));
+  return [...regions.map(r => ({ type: 'region', id: r.id })), ...pins.map(p => ({ type: 'pin', id: p.id }))];
 }
 
 export function applyInteractivity() {
@@ -213,7 +229,7 @@ const pinIcon = (pin) => L.divIcon({
 export function mountPinLayer(pin, single = true) {
   const marker = L.marker([pin.latlng.lat, pin.latlng.lng], { icon: pinIcon(pin), riseOnHover: true }).addTo(map);
   marker.on('click', (e) => {
-    if (activatePin(pin)) L.DomEvent.stopPropagation(e);
+    if (activatePin(pin, e.originalEvent)) L.DomEvent.stopPropagation(e);
   });
   layers.pins[pin.id] = marker;
   if (single) { styleItem('pin', pin, interactivity()); scheduleLabelLayout(); }
@@ -288,7 +304,7 @@ export function mountRegionLayer(region, single = true) {
   }
 
   group.on('click', (e) => {
-    if (activateRegion(region)) L.DomEvent.stopPropagation(e);
+    if (activateRegion(region, e.originalEvent)) L.DomEvent.stopPropagation(e);
   });
 
   group.on('mouseover', () => {

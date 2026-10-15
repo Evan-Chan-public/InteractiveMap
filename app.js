@@ -12,8 +12,8 @@ import { findAnnotation } from './nesting.js';
 import { fetchLinkedFile, linkedFile, readShareHash, showBanner } from './share.js';
 import { map } from './map.js';
 import { redo, undo } from './history.js';
-import { clearSelection, goUp, showLayer } from './selection.js';
-import { activateMapElement, applyLayerVisibility, drillFocus, peekFadedMark, regionFocusChanged } from './render.js';
+import { clearSelection, goUp, hasSelection, pickMany, selectionItems, showLayer } from './selection.js';
+import { activateMapElement, applyLayerVisibility, drillFocus, liveItems, peekFadedMark, regionFocusChanged } from './render.js';
 import { renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 import { addPin, cancelRegionDraw, commitRegion, disarmDelete, draw, isDeleteArmed, requestDelete,
@@ -49,6 +49,7 @@ function setMode(mode) {
   toolsPanel.classList.toggle('hidden', !design);
   document.body.classList.toggle('designing', design);
   btnMode.setAttribute('aria-checked', design);
+  if (design) map.boxZoom.disable(); else map.boxZoom.enable(); // design: shift-drag selects (or paints)
   if (!design) {
     setActiveTool(null);
     setMap(false);
@@ -62,6 +63,7 @@ function setMode(mode) {
     navStack.length = 0;
     state.ui.selected = null;
   }
+  if (!design) state.ui.picked = []; // gathering several is for editing
   applyLayerVisibility();
   renderLayerStrip();
   renderDetailPanel();
@@ -98,6 +100,7 @@ phone.addEventListener('change', measureDock);
 function setActiveTool(tool) {
   state.ui.activeTool = tool;
   if (tool && isMapOpen()) setMap(false);
+  if (tool && state.ui.picked.length) clearSelection(); // taking up a tool lets go of a gathered selection
 
   for (const [name, b] of Object.entries(TOOL_BTNS)) {
     b.classList.toggle('active', name === tool);
@@ -108,7 +111,6 @@ function setActiveTool(tool) {
   if (!isPaint) hideBrushCursor();
   map.getContainer().style.cursor = isPaint ? 'none' : (tool ? 'crosshair' : '');
   if (isPaint) map.dragging.disable(); else map.dragging.enable();
-  if (isPaint) map.boxZoom.disable();  else map.boxZoom.enable(); // shift+drag belongs to the brush
   if (tool === 'region') map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
 
   if (tool !== 'region') cancelRegionDraw();
@@ -173,10 +175,54 @@ map.on('click', (e) => {
 map.on('zoomend moveend resize', scheduleLabelLayout);
 document.fonts?.ready.then(lettersLoaded);
 
-// pins and regions are buttons: Enter or Space selects the focused one (Leaflet only makes them focusable)
+// pins and regions are buttons: Enter or Space selects the focused one (Leaflet only makes them focusable);
+// with shift held it's gathered with the others
 map.getContainer().addEventListener('keydown', (e) => {
-  if ((e.key === 'Enter' || e.key === ' ') && activateMapElement(e.target)) e.preventDefault();
+  if ((e.key === 'Enter' || e.key === ' ') && activateMapElement(e.target, e)) e.preventDefault();
 });
+
+// SHIFT-DRAG — Design Mode, no tool in hand: a box drawn with shift held gathers what lies wholly
+// inside it on the layer, adding to what's already selected. (A shift-click without a drag is left
+// to the place clicked.) Display Mode keeps Leaflet's shift-drag zoom
+const mapEl = map.getContainer();
+let gather  = null; // { x, y, box }
+
+const gathersHere = (e) => state.mode === 'design' && !state.ui.activeTool && e.shiftKey && e.button === 0;
+
+mapEl.addEventListener('pointerdown', (e) => {
+  if (!gathersHere(e) || e.pointerType !== 'mouse') return;
+  gather = { x: e.clientX, y: e.clientY, box: null };
+});
+// the browser's own shift-click text selection would paint the map and the tabs as it's dragged
+mapEl.addEventListener('mousedown', (e) => { if (gathersHere(e)) e.preventDefault(); });
+
+document.addEventListener('pointermove', (e) => {
+  if (!gather) return;
+  if (!gather.box) {
+    if (Math.hypot(e.clientX - gather.x, e.clientY - gather.y) < 5) return;
+    gather.box = document.createElement('div');
+    gather.box.className = 'gather-box';
+    mapEl.appendChild(gather.box);
+  }
+  const r = mapEl.getBoundingClientRect();
+  const [x0, x1] = [gather.x, e.clientX].sort((a, b) => a - b);
+  const [y0, y1] = [gather.y, e.clientY].sort((a, b) => a - b);
+  Object.assign(gather.box.style, { left: `${x0 - r.left}px`, top: `${y0 - r.top}px`, width: `${x1 - x0}px`, height: `${y1 - y0}px` });
+});
+
+let gathered = false; // the click that ends a drawn box mustn't also land on the map
+document.addEventListener('pointerup', (e) => {
+  const g = gather;
+  gather = null;
+  if (!g?.box) return;
+  g.box.remove();
+  const r = mapEl.getBoundingClientRect();
+  const corner = (x, y) => map.containerPointToLatLng([x - r.left, y - r.top]);
+  pickMany(liveItems(L.latLngBounds(corner(g.x, g.y), corner(e.clientX, e.clientY))), { add: true });
+  gathered = true;
+  setTimeout(() => { gathered = false; });
+});
+mapEl.addEventListener('click', (e) => { if (gathered) e.stopPropagation(); }, true);
 
 // a focused region shows its name, and comes into view if it's off screen; the browser's own
 // scroll-into-view would shift the map container out of alignment, so it's undone
@@ -227,10 +273,17 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if ((e.key === 'Backspace' || e.key === 'Delete') && !isTyping(e.target)) {
-    const sel = state.ui.selected;
-    if (state.mode !== 'design' || !sel || draw.active || state.ui.mergeSource) return;
+    const items = selectionItems();
+    if (state.mode !== 'design' || !items.length || draw.active || state.ui.mergeSource) return;
     e.preventDefault();
-    requestDelete(sel.type, sel.id);
+    requestDelete(items);
+    return;
+  }
+  // ⌘ / ctrl + A selects everything on the layer
+  if ((e.metaKey || e.ctrlKey) && key === 'a' && state.mode === 'design' && !isTyping(e.target)) {
+    e.preventDefault();
+    if (state.ui.activeTool) setActiveTool(null);
+    pickMany(liveItems());
     return;
   }
   const toolKey = TOOL_KEYS[key];
@@ -258,7 +311,7 @@ document.addEventListener('keydown', (e) => {
   if (vertexEdit.active)      exitVertexEdit();
   if (state.ui.activeTool === 'edit') setActiveTool(null);
   if (busy || e.target.isContentEditable) return; // layer rename handles its own esc
-  if (!state.ui.selected) {
+  if (!hasSelection()) {
     // nothing left to let go of: the tool in hand is put down
     const pocket = TOOL_BTNS[state.ui.activeTool];
     if (pocket && !typedFields.has(e.target)) { setActiveTool(null); pocket.focus(); }

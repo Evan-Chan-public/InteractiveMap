@@ -501,7 +501,8 @@ body {
   margin: 0;
 }
 
-.flap-actions #tool-upload { grid-column: 1 / -1; }
+.flap-actions #tool-upload,
+.flap-actions #project-new { grid-column: 1 / -1; }
 
 .flap-keys {
   display: grid;
@@ -1411,6 +1412,10 @@ body {
   flex-shrink: 0;
 }
 
+.color-dot.is-mixed {
+  background: repeating-linear-gradient(45deg, var(--ink-soft) 0 1.5px, transparent 1.5px 4px);
+}
+
 .swatch-grid {
   display: grid;
   grid-template-columns: repeat(9, minmax(0, 36px));
@@ -1615,6 +1620,9 @@ input[type="checkbox"]::before {
 
 input[type="checkbox"]:checked { background: var(--oxblood); border-color: var(--oxblood); }
 input[type="checkbox"]:checked::before { transform: scale(1); }
+/* some of a selection, not all: a bar instead of the tick */
+input[type="checkbox"]:indeterminate { background: var(--oxblood); border-color: var(--oxblood); }
+input[type="checkbox"]:indeterminate::before { -webkit-mask: none; mask: none; height: 2px; border-radius: 1px; transform: scale(1); }
 
 
 select.field-input {
@@ -1793,6 +1801,35 @@ select.field-input {
 .renest-actions {
   gap: 6px;
   margin-top: 14px;
+}
+
+/* gathering several: select all under the layer's list, and the hint for shift-click */
+.select-all-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-top: 10px;
+}
+
+.select-all-row .field-hint { color: var(--ink-soft); }
+
+.select-all-row { margin-bottom: 8px; }
+.picked-list-head { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--rule); }
+
+/* each row's tick-box sits in the gutter left of its colour or mark */
+.row-pick { margin-left: 6px; }
+.item-row:has(.row-pick) .item-row-main { padding-left: 6px; }
+.item-row.is-ticked { background: color-mix(in oklch, var(--gilt) 14%, transparent); }
+
+/* the box a shift-drag draws: a gilt rule pricked out on the map, washed faintly */
+.gather-box {
+  position: absolute;
+  z-index: 650; /* over the places, under the floating tabs */
+  pointer-events: none;
+  border: 1.5px dashed var(--gilt);
+  background: color-mix(in oklch, var(--gilt) 12%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--ink) 25%, transparent);
 }
 
 /* NESTING TREE (breadcrumb + nested children) */

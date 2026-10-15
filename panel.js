@@ -8,9 +8,10 @@ import { ancestorsOf, autoParent, childrenInView, countInView, findAnnotation, f
          renest, renestAll, visibleInMode, wouldCycle } from './nesting.js';
 import { map } from './map.js';
 import { pushHistory } from './history.js';
-import { clearSelection, goBack, navigateAnnotation, panToItem, selectAnnotation, showLayer } from './selection.js';
-import { applyLayerVisibility, hiddenInView, toggleItemView, updatePinLayer, updateRegionLayer } from './render.js';
-import { moveLayer, moveToLayer } from './layerstrip.js';
+import { clearSelection, goBack, navigateAnnotation, panToItem, pickMany, selectAnnotation, setPicked, showLayer,
+         togglePicked } from './selection.js';
+import { applyLayerVisibility, hiddenInView, liveItems, toggleItemView, updatePinLayer, updateRegionLayer } from './render.js';
+import { moveAllToLayer, moveLayer, moveToLayer } from './layerstrip.js';
 import { isDeleteArmed, requestDelete } from './create.js';
 import { cancelMerge, consolidateRegion, startMerge } from './shapes.js';
 import { renderFlap } from './flap.js';
@@ -24,11 +25,11 @@ const detailContent    = document.getElementById('detail-content');
 const detailTree       = document.getElementById('detail-tree');
 const detailTrail      = document.getElementById('detail-trail');
 
-// SWATCHES — the pigment box, plus a custom colour
+// SWATCHES — the pigment box, plus a custom colour. currentColor null: regions of several colours
 
 function renderSwatchGrid(currentColor) {
-  const cur = (currentColor || DEFAULT_REGION_COLOR).toLowerCase();
-  const inPreset = !!pigmentName(cur);
+  const cur = currentColor?.toLowerCase() ?? null;
+  const inPreset = !cur || !!pigmentName(cur);
   const swatches = PIGMENTS.map(({ name, color }) => {
     const active = color === cur;
     return `<button type="button" class="swatch${active ? ' active' : ''}" style="background:${color}" data-color="${color}"
@@ -44,20 +45,34 @@ function renderSwatchGrid(currentColor) {
   `;
 }
 
-// a radio group: one tab stop, arrow keys move the choice
-function bindMarkPicker(pin) {
+// the pins' shared mark, or null when they differ (likewise for regions' colours)
+const sharedValue = (items, read) => items.every(it => read(it) === read(items[0])) ? read(items[0]) : null;
+
+// mark null: pins of several marks, none chosen (the first takes the tab stop)
+function markPickerHtml(mark) {
+  return `
+    <span class="field-label">Mark</span>
+    <div id="mark-picker" class="mark-picker" role="radiogroup" aria-label="Mark">
+      ${Object.entries(PIN_MARKS).map(([key, m], i) => `
+        <button class="mark-option${mark === key ? ' active' : ''}" data-mark="${key}" tabindex="${mark === key || (!mark && !i) ? 0 : -1}"
+                role="radio" aria-checked="${mark === key}" aria-label="${m.title}" title="${m.title}">${markSvg(key, 16)}</button>`).join('')}
+    </div>`;
+}
+
+// a radio group: one tab stop, arrow keys move the choice. Marks every pin given
+function bindMarkPicker(pins) {
   const picker  = document.getElementById('mark-picker');
   const options = [...picker.querySelectorAll('.mark-option')];
   const choose  = (option) => {
-    if (option.dataset.mark === (pin.mark ?? DEFAULT_MARK)) return;
+    if (pins.every(pin => option.dataset.mark === (pin.mark ?? DEFAULT_MARK))) return;
     pushHistory();
-    pin.mark = option.dataset.mark;
+    pins.forEach(pin => { pin.mark = option.dataset.mark; });
     options.forEach(o => {
       o.classList.toggle('active', o === option);
       o.setAttribute('aria-checked', o === option);
       o.tabIndex = o === option ? 0 : -1;
     });
-    updatePinLayer(pin);
+    pins.forEach(updatePinLayer);
     scheduleSave();
   };
   picker.addEventListener('click', (e) => {
@@ -74,7 +89,8 @@ function bindMarkPicker(pin) {
   });
 }
 
-function bindSwatchGrid(annotation) {
+// colours every region given
+function bindSwatchGrid(regions) {
   const grid        = document.getElementById('swatch-grid');
   const customBtn   = document.getElementById('swatch-custom-btn');
   const customInput = document.getElementById('edit-color-custom');
@@ -93,11 +109,11 @@ function bindSwatchGrid(annotation) {
     const swatch = e.target.closest('[data-color]');
     if (!swatch) return;
     pushHistory();
-    annotation.color = swatch.dataset.color;
-    customInput.value = annotation.color;
-    syncDot(annotation.color);
+    const color = swatch.dataset.color;
+    regions.forEach(r => { r.color = color; updateRegionLayer(r); });
+    customInput.value = color;
+    syncDot(color);
     markActive(swatch);
-    updateRegionLayer(annotation);
     scheduleSave();
   });
 
@@ -105,10 +121,9 @@ function bindSwatchGrid(annotation) {
 
   customInput.addEventListener('focus', () => { pushHistory(); });
   customInput.addEventListener('input', (e) => {
-    annotation.color = e.target.value;
-    syncDot(annotation.color);
+    regions.forEach(r => { r.color = e.target.value; updateRegionLayer(r); });
+    syncDot(e.target.value);
     markActive(customBtn);
-    updateRegionLayer(annotation);
     scheduleSave();
   });
 }
@@ -126,10 +141,17 @@ export function renderDetailPanel() {
     if (source && target) { renderDetailTree(null); renderMergePreview(source, target); return; }
   }
 
-  setPanelVisible(!!sel || showsLayerList());
-  detailHeading.textContent = sel ? 'Details' : 'Layer';
-  detailPanel.classList.toggle('is-list', !sel);
-  detailClose.classList.toggle('hidden', !sel);
+  const multi = state.ui.picked.length > 0;
+  setPanelVisible(!!sel || multi || showsLayerList());
+  detailHeading.textContent = sel ? 'Details' : multi ? 'Selection' : 'Layer';
+  detailPanel.classList.toggle('is-list', !sel && !multi);
+  detailClose.classList.toggle('hidden', !sel && !multi);
+
+  if (multi) {
+    renderDetailTree(null);
+    renderPickedEditor();
+    return;
+  }
 
   if (!sel) {
     renderDetailTree(null);
@@ -170,21 +192,23 @@ function setPanelVisible(visible) {
   map.invalidateSize(); // map container width changed
 }
 
-// re-render the list if it's what the panel is showing
+// re-render the list (or the multi-selection) if it's what the panel is showing
 export function refreshLayerList() {
   if (!state.ui.selected) renderDetailPanel();
 }
 
-function renderLayerList() {
-  const layer   = state.annotations.layers.find(l => l.id === state.ui.activeLayerId);
-  const regions = state.annotations.regions.filter(r => r.layerId === layer?.id);
-  const pins    = state.annotations.pins.filter(p => p.layerId === layer?.id);
+// the layer's places as rows: a tick-box to gather it, its name (which selects it alone), and an eye
+function itemRowsHtml(layerId) {
+  const ticked  = new Set(state.ui.picked.map(p => p.id));
+  const regions = state.annotations.regions.filter(r => r.layerId === layerId);
+  const pins    = state.annotations.pins.filter(p => p.layerId === layerId);
 
   const row = (type, a) => {
     const name   = a.label || (type === 'region' ? 'Untitled region' : 'Untitled pin');
     const hidden = hiddenInView(a);
     return `
-    <div class="pin-list-item item-row${a.hidden ? ' item-hidden' : ''}${hidden ? ' view-hidden' : ''}" data-type="${type}" data-id="${escapeHtml(a.id)}">
+    <div class="pin-list-item item-row${a.hidden ? ' item-hidden' : ''}${hidden ? ' view-hidden' : ''}${ticked.has(a.id) ? ' is-ticked' : ''}" data-type="${type}" data-id="${escapeHtml(a.id)}">
+      <input type="checkbox" class="row-pick" ${ticked.has(a.id) ? 'checked' : ''} aria-label="Select ${escapeHtml(name)}" />
       <button type="button" class="item-row-main">
         ${type === 'region' ? `<span class="color-wheel" style="background:${escapeHtml(a.color || DEFAULT_REGION_COLOR)}"></span>` : `<span class="row-mark">${markSvg(a.mark, 12)}</span>`}
         <span class="item-row-label">${escapeHtml(name)}</span>
@@ -200,7 +224,34 @@ function renderLayerList() {
       ${items.map(a => row(type, a)).join('')}
     </details>` : '';
 
-  const sections = section('Regions', 'region', regions) + section('Pins', 'pin', pins);
+  return section('Regions', 'region', regions) + section('Pins', 'pin', pins);
+}
+
+// rows re-render on every change: the keyboard goes back to the control it was on
+function bindItemRows() {
+  const refocus = (id, part) => detailContent.querySelector(`.item-row[data-id="${CSS.escape(id)}"] ${part}`)?.focus();
+  detailContent.querySelectorAll('.item-row').forEach(el => {
+    el.addEventListener('click', (e) => {
+      const { type, id } = el.dataset;
+      const tick = e.target.closest('.row-pick');
+      const eye  = e.target.closest('.row-eye');
+      if (tick || eye) {
+        const had = document.activeElement === (tick || eye);
+        if (tick) togglePicked(type, id, { keep: true });
+        else toggleItemView(id);
+        if (had) refocus(id, tick ? '.row-pick' : '.row-eye');
+        return;
+      }
+      if (e.shiftKey || e.metaKey || e.ctrlKey) { togglePicked(type, id, { keep: true }); return; }
+      selectAnnotation(type, id);
+      panToItem(type, id);
+    });
+  });
+}
+
+function renderLayerList() {
+  const layer    = state.annotations.layers.find(l => l.id === state.ui.activeLayerId);
+  const sections = itemRowsHtml(layer?.id);
   const index    = state.annotations.layers.indexOf(layer);
   const last     = state.annotations.layers.length - 1;
   const layerName = escapeHtml(layer?.name || 'Layer');
@@ -213,7 +264,12 @@ function renderLayerList() {
         <button type="button" id="layer-move-right" aria-label="Move ${layerName} right (higher)" title="Move right (higher) · Alt+→" ${index >= last ? 'disabled' : ''}>${ICON_RIGHT}</button>
       </div>` : ''}
     </div>
-    ${sections || '<p class="detail-empty">Nothing on this layer yet.</p>'}
+    ${sections ? `
+    <div class="select-all-row">
+      <button type="button" id="select-all" class="btn-link" title="Select everything on this layer · ${MOD_KEY}A">Select all</button>
+      <span class="field-hint">or tick a few, or shift-click them on the map</span>
+    </div>
+    ${sections}` : '<p class="detail-empty">Nothing on this layer yet.</p>'}
     <div class="editor-actions renest-actions">
       <button id="renest-layer" class="btn-secondary" title="Re-run automatic nesting for this layer's items (manual parents are kept)">Re-nest layer</button>
       <button id="renest-all" class="btn-secondary" title="Re-run automatic nesting for every item (manual parents are kept)">Re-nest all</button>
@@ -240,20 +296,96 @@ function renderLayerList() {
   });
   bindMove('layer-move-left', -1);
   bindMove('layer-move-right', 1);
+  document.getElementById('select-all')?.addEventListener('click', () => pickMany(liveItems()));
+  bindItemRows();
+}
 
-  detailContent.querySelectorAll('.item-row').forEach(el => {
-    el.addEventListener('click', (e) => {
-      const { type, id } = el.dataset;
-      if (e.target.closest('.row-eye')) {
-        const refocus = e.target.closest('.row-eye') === document.activeElement;
-        toggleItemView(id); // re-renders the list: keep the keyboard where it was
-        if (refocus) detailContent.querySelector(`.item-row[data-id="${CSS.escape(id)}"] .row-eye`)?.focus();
-        return;
-      }
-      selectAnnotation(type, id);
-      panToItem(type, id);
-    });
+const MOD_KEY = /Mac|iP(hone|ad)/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+// MULTI-SELECTION — what's gathered, and the changes that can be made to all of it at once
+
+function renderPickedEditor() {
+  const picked = state.ui.picked.map(p => ({ ...p, item: findAnnotation(p.type, p.id) }));
+  if (picked.some(p => !p.item)) { setPicked(picked.filter(p => p.item)); return; } // some went missing
+  const regions = picked.filter(p => p.type === 'region').map(p => p.item);
+  const pins    = picked.filter(p => p.type === 'pin').map(p => p.item);
+  const items   = [...regions, ...pins];
+  const title   = [regions.length && plural(regions.length, 'region'), pins.length && plural(pins.length, 'pin')]
+    .filter(Boolean).join(' and ');
+
+  const layerId     = sharedValue(items, it => it.layerId);
+  const layerSelect = state.annotations.layers.length > 1 ? `
+    <label class="field-label" for="picked-layer">Layer</label>
+    <select id="picked-layer" class="field-input">
+      ${layerId ? '' : '<option value="" selected disabled>Several layers</option>'}
+      ${state.annotations.layers.map(l => `
+        <option value="${escapeHtml(l.id)}" ${l.id === layerId ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
+    </select>` : '';
+
+  const color       = regions.length ? sharedValue(regions, r => r.color || DEFAULT_REGION_COLOR) : null;
+  const colorSwatch = regions.length ? `
+    <details class="swatch-details">
+      <summary class="swatch-summary">
+        <span class="field-label" style="display:inline">Color</span>
+        <span class="color-dot${color ? '' : ' is-mixed'}" style="${color ? `background:${escapeHtml(color)}` : ''}"></span>
+        <span class="swatch-name">${color ? pigmentName(color) ?? 'Custom' : 'Several'}</span>
+      </summary>
+      ${renderSwatchGrid(color)}
+    </details>` : '';
+
+  const allHidden  = items.every(it => it.hidden);
+  const someHidden = !allHidden && items.some(it => it.hidden);
+  const armed      = isDeleteArmed(state.ui.picked);
+  const deleteText = `Delete ${items.length}`;
+
+  detailContent.innerHTML = `
+    <div class="detail-editor picked-editor">
+      <h2 class="detail-title">${title}</h2>
+
+      ${layerSelect}
+      ${colorSwatch}
+      ${pins.length ? markPickerHtml(sharedValue(pins, p => p.mark ?? DEFAULT_MARK)) : ''}
+
+      <label class="field-toggle" for="picked-hidden">
+        <input id="picked-hidden" type="checkbox" ${allHidden ? 'checked' : ''} />
+        Hide in display mode
+      </label>
+
+      <div class="editor-actions">
+        <button id="edit-delete" class="btn-danger${armed ? ' armed' : ''}" data-label="${deleteText}" title="Delete all ${items.length} (Backspace)">${armed ? 'Confirm delete' : deleteText}</button>
+      </div>
+    </div>
+    <div class="select-all-row picked-list-head">
+      <button type="button" id="select-all" class="btn-link" title="Select everything on this layer · ${MOD_KEY}A">Select all</button>
+      <button type="button" id="select-none" class="btn-link" title="Let go of the selection · Esc">Select none</button>
+    </div>
+    ${itemRowsHtml(state.ui.activeLayerId)}
+  `;
+
+  bindItemRows();
+  document.getElementById('select-all').addEventListener('click', () => pickMany(liveItems()));
+  document.getElementById('select-none').addEventListener('click', clearSelection);
+
+  document.getElementById('picked-layer')?.addEventListener('change', (e) => {
+    moveAllToLayer(state.ui.picked, e.target.value);
+    renderDetailPanel();
   });
+
+  if (regions.length) bindSwatchGrid(regions);
+  if (pins.length) bindMarkPicker(pins);
+
+  const hiddenCheck = document.getElementById('picked-hidden');
+  hiddenCheck.indeterminate = someHidden;
+  hiddenCheck.addEventListener('change', () => {
+    pushHistory();
+    items.forEach(it => { it.hidden = hiddenCheck.checked; });
+    applyLayerVisibility();
+    scheduleSave();
+  });
+
+  document.getElementById('edit-delete').addEventListener('click', () => requestDelete(state.ui.picked));
 }
 
 // descriptions can arrive in share links: markdown output is sanitized, or shown as plain text
@@ -336,17 +468,10 @@ function renderDetailEditor(annotation, type) {
         <span class="color-dot" style="background:${escapeHtml(annotation.color || DEFAULT_REGION_COLOR)}"></span>
         <span class="swatch-name">${pigmentName(annotation.color || DEFAULT_REGION_COLOR) ?? 'Custom'}</span>
       </summary>
-      ${renderSwatchGrid(annotation.color)}
+      ${renderSwatchGrid(annotation.color || DEFAULT_REGION_COLOR)}
     </details>` : '';
 
-  const mark       = annotation.mark ?? DEFAULT_MARK;
-  const markPicker = isRegion ? '' : `
-    <span class="field-label">Mark</span>
-    <div id="mark-picker" class="mark-picker" role="radiogroup" aria-label="Mark">
-      ${Object.entries(PIN_MARKS).map(([key, m]) => `
-        <button class="mark-option${mark === key ? ' active' : ''}" data-mark="${key}" tabindex="${mark === key ? 0 : -1}"
-                role="radio" aria-checked="${mark === key}" aria-label="${m.title}" title="${m.title}">${markSvg(key, 16)}</button>`).join('')}
-    </div>`;
+  const markPicker = isRegion ? '' : markPickerHtml(annotation.mark ?? DEFAULT_MARK);
 
   const mergeBanner = (isRegion && state.ui.mergeSource === annotation.id)
     ? `<div class="merge-banner">
@@ -389,14 +514,17 @@ function renderDetailEditor(annotation, type) {
     ? `<div class="field-label" style="margin-top:6px">${polyCount} polygon${polyCount === 1 ? '' : 's'}</div>`
     : '';
 
-  const deleteBtn = isDeleteArmed(annotation.id)
+  const deleteBtn = isDeleteArmed([{ type, id: annotation.id }])
     ? '<button id="edit-delete" class="btn-danger armed" title="Delete (Backspace)">Confirm delete</button>'
     : '<button id="edit-delete" class="btn-danger" title="Delete (Backspace)">Delete</button>';
+  // the way into a multi-selection where there's no shift key (phones hide the layer's list)
+  const pickBtn    = '<button id="edit-pick" class="btn-secondary" title="Tick more places to change together (or shift-click them on the map)">Select more</button>';
   const actionBtns = isRegion ? `
     <button id="edit-merge" class="btn-secondary">Merge…</button>
     ${polyCount > 1 ? `<button id="edit-consolidate" class="btn-secondary">Consolidate</button>` : ''}
+    ${pickBtn}
     ${deleteBtn}
-  ` : deleteBtn;
+  ` : pickBtn + deleteBtn;
 
   detailContent.innerHTML = `
     ${backButtonHtml()}
@@ -470,11 +598,16 @@ function renderDetailEditor(annotation, type) {
     renderDetailTree(annotation);
   });
 
-  if (isRegion) bindSwatchGrid(annotation);
-  else bindMarkPicker(annotation);
+  if (isRegion) bindSwatchGrid([annotation]);
+  else bindMarkPicker([annotation]);
 
   document.getElementById('edit-delete').addEventListener('click', () => {
-    requestDelete(type, annotation.id);
+    requestDelete([{ type, id: annotation.id }]);
+  });
+
+  document.getElementById('edit-pick').addEventListener('click', () => {
+    setPicked([{ type, id: annotation.id }], { keep: true });
+    detailContent.querySelector(`.item-row[data-id="${CSS.escape(annotation.id)}"] .row-pick`)?.focus();
   });
 
   document.getElementById('edit-merge')?.addEventListener('click', () => {
@@ -506,7 +639,7 @@ export function showDeleteArmed(on) {
   const btn = document.getElementById('edit-delete');
   if (!btn) return;
   btn.classList.toggle('armed', on);
-  btn.textContent = on ? 'Confirm delete' : 'Delete';
+  btn.textContent = on ? 'Confirm delete' : (btn.dataset.label || 'Delete');
 }
 
 function treeLinkHtml(type, item) {

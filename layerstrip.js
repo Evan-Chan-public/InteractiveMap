@@ -5,8 +5,8 @@ import { generateId, ICON_EYE, ICON_EYE_OFF, ICON_X } from './utils.js';
 import { scheduleSave } from './persistence.js';
 import { findAnnotation, orphanChildrenOf, renestAround } from './nesting.js';
 import { pushHistory } from './history.js';
-import { clearSelection, followToLayer } from './selection.js';
-import { applyInteractivity, applyZOrder, remountRegionLayer, toggleLayerView, unmountRegion } from './render.js';
+import { clearSelection, followToLayer, showLayer } from './selection.js';
+import { applyInteractivity, applyZOrder, remountRegionLayer, revealInView, toggleLayerView, unmountRegion } from './render.js';
 import { refreshLayerList } from './panel.js';
 import { cancelMerge } from './shapes.js';
 import { renderFlap } from './flap.js';
@@ -151,6 +151,7 @@ function reorderLayer(draggedId, targetId) {
 function setActiveLayer(id) {
   const sel = state.ui.selected;
   if (sel && (state.mode === 'display' || findAnnotation(sel.type, sel.id)?.layerId !== id)) clearSelection();
+  if (state.ui.picked.length && id !== state.ui.activeLayerId) clearSelection(); // gathered from the layer being left
   if (state.ui.activeLayerId === id) return;
   state.ui.activeLayerId = id;
   if (state.ui.mergeSource) cancelMerge();
@@ -166,6 +167,22 @@ export function moveToLayer(type, item, layerId) {
   renestAround(item);
   if (type === 'region') remountRegionLayer(item); // restack at new position
   followToLayer(type, item.id);
+  scheduleSave();
+}
+
+// a multi-selection moves as one undo step, and stays selected on its new layer
+export function moveAllToLayer(picked, layerId) {
+  const moving = picked.map(p => ({ type: p.type, item: findAnnotation(p.type, p.id) }))
+    .filter(({ item }) => item && item.layerId !== layerId);
+  if (!moving.length) return;
+  pushHistory();
+  moving.forEach(({ item }) => { item.layerId = layerId; });
+  for (const { type, item } of moving) {
+    renestAround(item);
+    if (type === 'region') remountRegionLayer(item); // restack at new position
+    if (state.mode === 'design') revealInView(item);
+  }
+  showLayer(layerId);
   scheduleSave();
 }
 
@@ -226,7 +243,7 @@ function deleteLayer(id) {
     const fallback = state.annotations.layers[Math.max(0, idx - 1)];
     state.ui.activeLayerId = fallback.id;
   }
-  if (state.ui.selected) clearSelection();
+  if (state.ui.selected || state.ui.picked.length) clearSelection();
 
   renderLayerStrip();
   applyInteractivity();

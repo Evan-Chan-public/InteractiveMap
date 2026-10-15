@@ -25,6 +25,7 @@ export const VERSION = 1;
 // DOM
 
 const titleInput   = document.getElementById('project-title');
+const btnNew       = document.getElementById('project-new');
 const btnExport    = document.getElementById('project-export');
 const btnImport    = document.getElementById('project-import');
 const importInput  = document.getElementById('project-input');
@@ -115,6 +116,7 @@ export async function openDocument(doc, { autosave = true, locked = false, useMa
   state.ui.autosave       = autosave;
   state.ui.shareLocked    = locked;
   state.ui.selected       = null;
+  state.ui.picked         = [];
   navStack.length         = 0;
   ensureLayers(state.annotations);
   ensureNesting();
@@ -209,14 +211,28 @@ export async function importFile(file) {
   if (await saveNow()) setStatus(`Opened ${file.name}.`);
 }
 
+// NEW MAP — a blank map in place of this one: no places, no image of its own, no name
+
+async function newMap() {
+  if (state.ui.shareLocked) return;
+  const choice = await confirmReplace('Start a new map?', 'Start new');
+  if (choice === 'cancel') return;
+  if (choice === 'export') await exportFile();
+  savedUnreadable = false;
+  await openDocument(emptyDocument(), { autosave: true });
+  forgetLinkInAddress();
+  scheduleSave({ image: true }); // the old map's image goes too
+  if (await saveNow()) setStatus('Started a new map. Upload an image to draw on.');
+}
+
 // replacing the saved map can't be undone: offer to export it first
-async function confirmReplace(question) {
+async function confirmReplace(question, label = 'Replace') {
   // a linked map is on screen: the saved one it would replace isn't, so always ask
   if (state.ui.autosave && !hasContent() && !state.docImage) return 'replace';
   const saved = state.ui.autosave ? 'your current map' : 'your saved map (if you have one)';
   return ask(question, `This replaces ${saved}, and it can't be undone.`, [
     ...(state.ui.autosave ? [{ value: 'export', label: 'Export current first' }] : []),
-    { value: 'replace', label: 'Replace', danger: true },
+    { value: 'replace', label, danger: true },
     { value: 'cancel',  label: 'Cancel' },
   ]);
 }
@@ -274,6 +290,7 @@ titleInput?.addEventListener('input', () => {
   scheduleSave();
 });
 
+btnNew?.addEventListener('click', newMap);
 btnExport?.addEventListener('click', exportFile);
 btnImport?.addEventListener('click', () => importInput.click());
 importInput?.addEventListener('change', () => {

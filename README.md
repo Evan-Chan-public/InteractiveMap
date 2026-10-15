@@ -70,8 +70,18 @@ All annotations have a **label** and a **description** field. Descriptions suppo
 - **Hide in display mode** (editor checkbox) hides an item from viewers. It's saved with the map.
 - **Eye toggles** declutter your own view while editing: an eye on each row of the right panel's list hides that item, and an eye on each layer chip hides the whole layer. They only apply in Design Mode, aren't saved, aren't part of undo, and never change what viewers see. Selecting a hidden item (from the list or the tree) or creating something on a hidden layer shows it again; the eraser leaves hidden regions alone. Opening another map shows everything again.
 
+### Selecting Several
+In Design Mode, with no tool in hand, you can gather several items on the active layer and change them all at once:
+
+- `Shift`-click (or `Cmd`/`Ctrl`-click) places on the map to add or remove them.
+- `Shift`-drag a box on the map to add everything wholly inside it.
+- `Cmd`/`Ctrl`+`A` or **Select all** (right panel) takes everything on the layer.
+- Tick the boxes on the right panel's list, or click **Select more** in an item's editor (the way in on phones).
+
+The panel then shows what's selected, with a shared **Layer**, **Color** (regions), **Mark** (pins) and **Hide in display mode**, and **Delete N**. Each change is one undo step. `Esc`, **Select none**, picking up a tool or switching to Display Mode lets go. In Design Mode `Shift`-drag selects instead of zooming.
+
 ### Deleting
-Select an item in Design Mode and press `Backspace` / `Delete`, or click **Delete** in the editor. With **Confirm deletes** on (Map flap, on by default, remembered per browser), the first press arms the button and a second press or click within 3 seconds deletes; `Esc` cancels. Keys typed into a text field never delete. Newly created items open with their label focused for naming; selecting an existing item doesn't, so `Backspace` goes to the item.
+Select an item (or several) in Design Mode and press `Backspace` / `Delete`, or click **Delete** in the editor. With **Confirm deletes** on (Map flap, on by default, remembered per browser), the first press arms the button and a second press or click within 3 seconds deletes; `Esc` cancels. Keys typed into a text field never delete. Newly created items open with their label focused for naming; selecting an existing item doesn't, so `Backspace` goes to the item.
 
 ### Undo / Redo
 `Ctrl+Z` / `Ctrl+Shift+Z` (or `Ctrl+Y`). Up to 50 steps of history.
@@ -98,10 +108,11 @@ Every region and pin can have a parent region on another layer, forming a tree.
 
 ### Map Files
 
-A map (title, layers, regions, pins and the map image) can be saved as one `.imap.json` file. The **Map** pocket at the foot of the tool roll (Design Mode) opens the map's flap: its title, **Upload image** and the **Export** / **Import** buttons; you can also drop a `.imap.json` file anywhere on the map to open it.
+A map (title, layers, regions, pins and the map image) can be saved as one `.imap.json` file. The **Map** pocket at the foot of the tool roll (Design Mode) opens the map's flap: its title, **Upload image**, the **Export** / **Import** buttons and **New map**; you can also drop a `.imap.json` file anywhere on the map to open it.
 
 - **Export** downloads `<title>.imap.json`. The image is embedded, so the file opens anywhere; the bundled world map (`maps/…`) is stored as a reference instead, since it ships with the app.
 - **Import** replaces the current map. If the current map has content you're asked first, with an option to export it before replacing. Undo history starts fresh with the opened map.
+- **New map** starts a blank map (no places, one layer, no image of its own) in place of the current one, after asking, with the same option to export first.
 - Files are checked on open like share links: unknown or malformed fields are dropped, only PNG/JPEG/GIF/WebP images are accepted, and image references must be `http(s)` or relative paths.
 
 Format (version 1, plain JSON):

@@ -130,18 +130,22 @@ confirmBox?.addEventListener('change', () => {
   disarmDelete();
 });
 
-let armed = null; // { id, timer }
+let armed = null; // { key, timer }
 
-export const isDeleteArmed = (id) => !!armed && (id === undefined || armed.id === id);
+// items: [{ type, id }], one or a multi-selection; armed for that same set
+const keyOf = (items) => items.map(it => it.id).join(' ');
 
-export function requestDelete(type, id) {
-  if (!confirmDeletes || armed?.id === id) {
+export const isDeleteArmed = (items) => !!armed && (items === undefined || armed.key === keyOf(items));
+
+export function requestDelete(items) {
+  const key = keyOf(items);
+  if (!confirmDeletes || armed?.key === key) {
     disarmDelete();
-    deleteAnnotation(type, id);
+    deleteAnnotations(items);
     return;
   }
   disarmDelete();
-  armed = { id, timer: setTimeout(disarmDelete, ARM_MS) };
+  armed = { key, timer: setTimeout(disarmDelete, ARM_MS) };
   showDeleteArmed(true);
 }
 
@@ -152,17 +156,24 @@ export function disarmDelete() {
   showDeleteArmed(false);
 }
 
-function deleteAnnotation(type, id) {
+// one undo step, however many go
+function deleteAnnotations(items) {
   pushHistory();
-  if (type === 'pin') {
-    state.annotations.pins = state.annotations.pins.filter(p => p.id !== id);
-    layers.pins[id]?.remove();
-    delete layers.pins[id];
-  } else if (type === 'region') {
-    state.annotations.regions = state.annotations.regions.filter(r => r.id !== id);
-    unmountRegion(id);
-    orphanChildrenOf([id]);
-  }
+  const gone = new Set(items.map(it => it.id));
+  state.annotations.pins = state.annotations.pins.filter(p => {
+    if (!gone.has(p.id)) return true;
+    layers.pins[p.id]?.remove();
+    delete layers.pins[p.id];
+    return false;
+  });
+  const regionIds = [];
+  state.annotations.regions = state.annotations.regions.filter(r => {
+    if (!gone.has(r.id)) return true;
+    unmountRegion(r.id);
+    regionIds.push(r.id);
+    return false;
+  });
+  if (regionIds.length) orphanChildrenOf(regionIds);
   clearSelection();
   scheduleSave();
 }
