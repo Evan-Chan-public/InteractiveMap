@@ -661,7 +661,7 @@ body {
 
 #btn-share:hover { background: var(--leaf-sunk); }
 
-/* the mode switch: Display and Design side by side, the open one gilded */
+/* the mode switch: Design and Display side by side, the open one gilded */
 #btn-mode {
   gap: 0;
   padding: 0;
