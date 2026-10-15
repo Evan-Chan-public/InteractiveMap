@@ -247,7 +247,14 @@ function forgetLinkInAddress() {
 export function renderProjectPanel() {
   if (titleInput && document.activeElement !== titleInput) titleInput.value = state.title;
   linkNotice?.classList.toggle('hidden', state.ui.autosave || savedUnreadable);
+  showTitle();
+}
+
+// the tab title, and the page's (visually hidden) heading for screen readers
+function showTitle() {
   document.title = state.title ? `${state.title} · Cairn` : 'Cairn';
+  const heading = document.getElementById('app-title');
+  if (heading) heading.textContent = state.title || 'Cairn';
 }
 
 export function setStatus(message, isError = false) {
@@ -263,7 +270,7 @@ document.addEventListener('savestatus', (e) => {
 
 titleInput?.addEventListener('input', () => {
   state.title = titleInput.value;
-  document.title = state.title ? `${state.title} · Cairn` : 'Cairn';
+  showTitle();
   scheduleSave();
 });
 

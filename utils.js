@@ -45,10 +45,27 @@ export function latlngDist(a, b) {
   return Math.sqrt(dlat * dlat + dlng * dlng);
 }
 
-// INLINE ICONS (lucide eye / eye-off)
+// PIGMENTS — region colours, from an insular scriptorium's paint box: eight that stay distinct
+// side by side. New regions cycle through them; the picker also takes any custom colour
+export const PIGMENTS = [
+  { name: 'Woad',      color: '#2f5a8a' }, { name: 'Minium',    color: '#c8572c' },
+  { name: 'Verdigris', color: '#3a8a76' }, { name: 'Orpiment',  color: '#d9a521' },
+  { name: 'Folium',    color: '#6b3d78' }, { name: 'Kermes',    color: '#9c2b33' },
+  { name: 'Moss',      color: '#5e7b34' }, { name: 'Ochre',     color: '#a8722a' },
+];
+export const DEFAULT_REGION_COLOR = PIGMENTS[0].color;
+
+export const pigmentName = (color) =>
+  PIGMENTS.find(p => p.color === String(color).toLowerCase())?.name ?? null;
+
+// INLINE ICONS (lucide eye / eye-off / x / chevrons / pipette)
 const svg = (body) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 export const ICON_EYE     = svg('<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>');
 export const ICON_EYE_OFF = svg('<path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/>');
+export const ICON_X        = svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>');
+export const ICON_LEFT     = svg('<path d="m15 18-6-6 6-6"/>');
+export const ICON_RIGHT    = svg('<path d="m9 18 6-6-6-6"/>');
+export const ICON_PIPETTE  = svg('<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/>');
 
 // PIN MARKS — the inked symbol beside a pin's name, as on an old map. Drawn in currentColor;
 // the ring's hollow and the gaps between the cairn's stones take the halo colour (.mark-halo in CSS)

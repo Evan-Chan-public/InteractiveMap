@@ -1,7 +1,7 @@
 // CREATE — new pins and regions (drawn by hand), colours, and deletion
 
 import { layers, state } from './state.js';
-import { DEFAULT_MARK, generateId } from './utils.js';
+import { DEFAULT_MARK, generateId, PIGMENTS } from './utils.js';
 import { scheduleSave } from './persistence.js';
 import { orphanChildrenOf, renestAround } from './nesting.js';
 import { map } from './map.js';
@@ -39,10 +39,7 @@ export const draw = {
   polyline: null,
 };
 
-const REGION_COLORS = [
-  '#4a9eff', '#ff7c4a', '#4aff9e', '#ff4a7c',
-  '#c04aff', '#ffe04a', '#4afff0', '#ff4adf',
-];
+const REGION_COLORS = PIGMENTS.map(p => p.color);
 let colorIndex = 0;
 function nextColor() {
   return REGION_COLORS[colorIndex++ % REGION_COLORS.length];
@@ -84,15 +81,14 @@ export function startRegionDraw(latlng) {
   draw.points.push(latlng);
 
   const dot = L.circleMarker(latlng, {
-    radius: 4, color: '#fff', weight: 1.5,
-    fillColor: '#4a9eff', fillOpacity: 1, interactive: false,
+    radius: 4, weight: 1.5, fillOpacity: 1, interactive: false, className: 'draw-vertex',
   }).addTo(map);
   draw.markers.push(dot);
 
   if (draw.polyline) draw.polyline.remove();
   if (draw.points.length > 1) {
     draw.polyline = L.polyline(draw.points, {
-      color: '#4a9eff', weight: 1.5, dashArray: '4 4', interactive: false,
+      weight: 1.5, dashArray: '4 4', interactive: false, className: 'draw-line',
     }).addTo(map);
   }
 }

@@ -3,32 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
   <title>Cairn</title>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400&family=Alegreya+SC:wght@500;700&family=IM+Fell+English&family=Uncial+Antiqua&display=swap" />
   <link rel="stylesheet" href="style.css" />
-  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
   <script src="https://unpkg.com/marked@14.1.3/marked.min.js"></script>
   <script src="https://unpkg.com/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
 <body>
+  <h1 id="app-title" class="visually-hidden">Cairn</h1>
 
   <!-- Left panel: design tools (hidden in display mode) -->
-  <aside id="tools-panel" class="panel panel-left hidden">
-    <div class="panel-header">Tools</div>
+  <aside id="tools-panel" class="panel panel-left hidden" aria-label="Tools">
+    <div class="panel-header rail-header">
+      <span class="wordmark" aria-hidden="true">Cairn</span>
+      <button id="tools-close" class="panel-close" aria-label="Close tools" title="Close tools"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </div>
 
     <div class="tool-group">
       <label class="field-label" for="project-title">Map</label>
       <input id="project-title" type="text" class="field-input" placeholder="Untitled map" maxlength="200" />
       <div class="tool-row">
         <button id="project-export" class="tool-btn" title="Download this map (annotations + image) as a .imap.json file">
-          <i data-lucide="download"></i> Export
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Export
         </button>
         <button id="project-import" class="tool-btn" title="Open a .imap.json map file (or drop one on the map)">
-          <i data-lucide="folder-open"></i> Import
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg> Import
         </button>
       </div>
       <input type="file" id="project-input" accept=".json,application/json" hidden />
@@ -36,52 +40,52 @@
         Opened from a link: changes aren't saved.
         <button id="keep-map" class="btn-link">Keep as my map</button>
       </div>
-      <div id="project-status" class="wand-status"></div>
+      <div id="project-status" class="wand-status" role="status"></div>
     </div>
 
     <div class="tool-group">
       <button id="tool-upload" class="tool-btn" title="Upload map image">
-        <i data-lucide="upload"></i> Upload Image
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg> Upload Image
       </button>
       <input type="file" id="upload-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden />
     </div>
 
     <div class="tool-group">
       <button id="tool-pin" class="tool-btn" title="Place a pin">
-        <i data-lucide="map-pin"></i> Add Pin
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg> Add Pin
       </button>
     </div>
 
     <div class="tool-group">
       <button id="tool-region" class="tool-btn" title="Draw a region polygon">
-        <i data-lucide="box-select"></i> Add Region
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></svg> Add Region
       </button>
       <button id="tool-wand" class="tool-btn" title="Flood-fill a region from a click">
-        <i data-lucide="wand-2"></i> Flood Region
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></svg> Flood Region
       </button>
       <button id="tool-edit" class="tool-btn" title="Edit vertices of selected region">
-        <i data-lucide="pen-tool"></i> Edit Vertices
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z"/><path d="m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18"/><path d="m2.3 2.3 7.286 7.286"/><circle cx="11" cy="11" r="2"/></svg> Edit Vertices
       </button>
     </div>
 
     <div class="tool-group">
       <button id="tool-brush" class="tool-btn" title="Paint brush — drag to add to selected region">
-        <i data-lucide="paintbrush"></i> Brush
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m14.622 17.897-10.68-2.913"/><path d="M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z"/><path d="M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15"/></svg> Brush
       </button>
       <button id="tool-eraser" class="tool-btn" title="Eraser — drag to subtract from regions">
-        <i data-lucide="eraser"></i> Eraser
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg> Eraser
       </button>
     </div>
 
     <div class="tool-group hidden" id="wand-options">
-      <label class="field-label">Tolerance <span id="wand-tolerance-val">30</span></label>
+      <label class="field-label" for="wand-tolerance">Tolerance <span id="wand-tolerance-val">30</span></label>
       <input id="wand-tolerance" type="range" min="1" max="120" value="30" class="field-range" />
-      <div id="wand-status" class="wand-status"></div>
+      <div id="wand-status" class="wand-status" role="status"></div>
       <button id="wand-cancel" class="btn-danger hidden">Cancel</button>
     </div>
 
     <div class="tool-group hidden" id="brush-controls">
-      <label class="field-label">Brush size <span id="brush-size-val">30</span>px</label>
+      <label class="field-label" for="brush-size">Brush size <span id="brush-size-val">30</span>px</label>
       <input id="brush-size" type="range" min="5" max="150" value="30" class="field-range" />
     </div>
 
@@ -107,14 +111,15 @@
     <!-- Mode toggle + share (top-right corner of map) -->
     <div id="mode-toggle">
       <div>
+        <button id="btn-tools" class="hidden" aria-controls="tools-panel" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/></svg> Tools</button>
         <button id="btn-mode">Switch to Design Mode</button>
         <button id="btn-share" title="Get a share link">Share</button>
       </div>
       <div id="share-dialog" class="hidden">
         <div class="share-section-title">Link to a map file</div>
-        <input id="share-file-src" type="text" placeholder="https://gist.github.com/you/abc123…" />
+        <input id="share-file-src" type="text" aria-label="Map file or gist address" placeholder="https://gist.github.com/you/abc123…" />
         <div class="share-url-row">
-          <input id="share-file-url" type="text" readonly />
+          <input id="share-file-url" type="text" readonly aria-label="Link to the map file" />
           <button id="share-file-copy" disabled>Copy</button>
         </div>
         <label class="share-lock-label">
@@ -127,7 +132,7 @@
           <input type="checkbox" id="share-lock" /> Lock Design Mode for viewer
         </label>
         <div class="share-url-row">
-          <input id="share-url" type="text" readonly />
+          <input id="share-url" type="text" readonly aria-label="Quick link" />
           <button id="share-copy">Copy</button>
         </div>
         <p id="share-note" class="share-note"></p>
@@ -135,7 +140,7 @@
     </div>
 
     <!-- Messages about the map as a whole (loading / errors for linked maps) -->
-    <div id="map-banner" class="map-banner hidden"></div>
+    <div id="map-banner" class="map-banner hidden" role="status"></div>
 
     <!-- Placeholder shown when no image is loaded -->
     <div id="map-placeholder">
@@ -145,14 +150,18 @@
 
   <!-- Confirmation for actions that replace the current map -->
   <dialog id="confirm-dialog" class="confirm-dialog">
-    <h3 class="dialog-title"></h3>
+    <h2 class="dialog-title"></h2>
     <p class="dialog-message"></p>
     <div class="dialog-buttons"></div>
   </dialog>
 
   <!-- Right panel: annotation details -->
-  <aside id="detail-panel" class="panel panel-right hidden">
-    <div class="panel-header">Details</div>
+  <aside id="detail-panel" class="panel panel-right hidden" aria-labelledby="detail-heading">
+    <div class="panel-header">
+      <span id="detail-heading" class="visually-hidden">Details</span>
+      <nav id="detail-trail" class="detail-trail hidden" aria-label="Places this sits in"></nav>
+      <button id="detail-close" class="panel-close" aria-label="Close" title="Close (Esc)"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </div>
     <div id="detail-tree" class="hidden"></div>
     <div id="detail-content">
       <p class="detail-empty">Click a region or pin to see details.</p>

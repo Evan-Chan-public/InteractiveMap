@@ -1,7 +1,7 @@
 // LAYER STRIP — the layer chips (top-left): switch, add, rename, reorder, delete; moving items between layers
 
 import { layers, state } from './state.js';
-import { generateId, ICON_EYE, ICON_EYE_OFF } from './utils.js';
+import { generateId, ICON_EYE, ICON_EYE_OFF, ICON_X } from './utils.js';
 import { scheduleSave } from './persistence.js';
 import { findAnnotation, orphanChildrenOf, renestAround } from './nesting.js';
 import { pushHistory } from './history.js';
@@ -17,7 +17,8 @@ const btnLayerAdd      = document.getElementById('layer-add');
 
 // LAYERS
 
-export function renderLayerStrip() {
+// focusTarget: after a re-render, put the keyboard back on this layer's chip ('name' | 'eye')
+export function renderLayerStrip(focusTarget = null) {
   layerChips.innerHTML = '';
   const editable = state.mode === 'design';
   const onlyOne  = state.annotations.layers.length === 1;
@@ -29,48 +30,65 @@ export function renderLayerStrip() {
     chip.dataset.id = layer.id;
     chip.draggable  = editable;
 
-    const name = document.createElement('span');
+    const name = document.createElement('button');
+    name.type = 'button';
     name.className = 'layer-chip-name';
     name.textContent = layer.name;
+    name.setAttribute('aria-pressed', layer.id === state.ui.activeLayerId);
+    if (editable) name.title = 'Double-click or F2 to rename · Alt+←/→ to reorder';
     chip.appendChild(name);
 
     const viewHidden = editable && state.ui.viewHiddenLayers.has(layer.id);
     chip.classList.toggle('view-hidden', viewHidden);
     if (editable) {
-      const eye = document.createElement('span');
+      const eye = document.createElement('button');
+      eye.type = 'button';
       eye.className = 'layer-chip-eye';
       eye.innerHTML = viewHidden ? ICON_EYE_OFF : ICON_EYE;
       eye.title = viewHidden ? 'Show this layer' : 'Hide this layer while editing (not saved; viewers still see it)';
+      eye.setAttribute('aria-label', `${viewHidden ? 'Show' : 'Hide'} ${layer.name} while editing`);
+      eye.setAttribute('aria-pressed', viewHidden);
       chip.appendChild(eye);
     }
 
     if (editable && !onlyOne) {
-      const close = document.createElement('span');
+      const close = document.createElement('button');
+      close.type = 'button';
       close.className = 'layer-chip-close';
-      close.textContent = '×';
+      close.innerHTML = ICON_X;
       close.title = 'Delete layer';
+      close.setAttribute('aria-label', `Delete layer ${layer.name}`);
       chip.appendChild(close);
     }
 
     chip.addEventListener('click', (e) => {
-      if (e.target.closest('.layer-chip-eye')) { toggleLayerView(layer.id); return; }
-      if (e.target === name && name.isContentEditable) return;
-      if (e.target.classList.contains('layer-chip-close')) {
-        handleLayerDelete(layer.id, e.target);
+      if (e.target.closest('.layer-chip-input')) return;
+      if (e.target.closest('.layer-chip-eye')) {
+        toggleLayerView(layer.id);
+        refocusChip(layer.id, 'eye');
         return;
       }
+      const close = e.target.closest('.layer-chip-close');
+      if (close) { handleLayerDelete(layer.id, close); return; }
+      const hadFocus = layerChips.contains(document.activeElement);
       setActiveLayer(layer.id);
+      if (hadFocus) refocusChip(layer.id);
     });
 
     if (editable) {
       name.addEventListener('dblclick', (e) => {
         e.stopPropagation();
-        startRenameLayer(layer.id, name);
+        startRenameLayer(layer.id, chip, name);
+      });
+      name.addEventListener('keydown', (e) => {
+        if (e.key === 'F2') { e.preventDefault(); startRenameLayer(layer.id, chip, name); return; }
+        const step = e.altKey ? { ArrowLeft: -1, ArrowRight: 1 }[e.key] : 0;
+        if (step) { e.preventDefault(); moveLayer(layer.id, step); }
       });
     }
 
     chip.addEventListener('dragstart', (e) => {
-      if (name.isContentEditable) { e.preventDefault(); return; }
+      if (chip.querySelector('.layer-chip-input')) { e.preventDefault(); return; }
       chip.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', layer.id);
@@ -93,6 +111,24 @@ export function renderLayerStrip() {
 
     layerChips.appendChild(chip);
   });
+  if (focusTarget) refocusChip(focusTarget.id, focusTarget.part);
+}
+
+// the strip is rebuilt on every change; keyboard users keep their place on the chip they used
+function refocusChip(id, part = 'name') {
+  const chip = layerChips.querySelector(`.layer-chip[data-id="${CSS.escape(id)}"]`);
+  chip?.querySelector(part === 'eye' ? '.layer-chip-eye' : '.layer-chip-name')?.focus();
+}
+
+// one step left (lower) or right (higher) in the stack: the keyboard and touch route for reordering
+export function moveLayer(id, step) {
+  const arr  = state.annotations.layers;
+  const from = arr.findIndex(l => l.id === id);
+  const to   = from + step;
+  if (from < 0 || to < 0 || to >= arr.length) return;
+  const hadFocus = layerChips.contains(document.activeElement);
+  reorderLayer(id, arr[to].id);
+  if (hadFocus) refocusChip(id);
 }
 
 function reorderLayer(draggedId, targetId) {
@@ -105,6 +141,7 @@ function reorderLayer(draggedId, targetId) {
   arr.splice(to, 0, moved);
   renderLayerStrip();
   applyZOrder();
+  refreshLayerList(); // the list's move buttons depend on the order
   scheduleSave();
 }
 
@@ -150,10 +187,13 @@ function handleLayerDelete(id, closeEl) {
     return;
   }
   if (pendingDelete.id) clearTimeout(pendingDelete.timer);
+  const label = closeEl.getAttribute('aria-label');
   closeEl.classList.add('confirm');
+  closeEl.setAttribute('aria-label', `Confirm: ${label}`);
   pendingDelete.id = id;
   pendingDelete.timer = setTimeout(() => {
     closeEl.classList.remove('confirm');
+    closeEl.setAttribute('aria-label', label);
     pendingDelete = { id: null, timer: null };
   }, 2500);
 }
@@ -192,36 +232,40 @@ function deleteLayer(id) {
   scheduleSave();
 }
 
-function startRenameLayer(id, nameEl) {
-  nameEl.contentEditable = 'true';
-  nameEl.focus();
-  const range = document.createRange();
-  range.selectNodeContents(nameEl);
-  const sel = window.getSelection();
-  sel.removeAllRanges();
-  sel.addRange(range);
+// renaming swaps the chip's name for a text field: Enter keeps it, Esc or an empty name doesn't
+function startRenameLayer(id, chip, nameBtn) {
+  const layer = state.annotations.layers.find(l => l.id === id);
+  if (!layer) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'layer-chip-input';
+  input.value = layer.name;
+  input.maxLength = 80;
+  input.setAttribute('aria-label', 'Layer name');
+  chip.draggable = false;
+  nameBtn.replaceWith(input);
+  input.focus();
+  input.select();
 
-  const commit = () => {
-    nameEl.contentEditable = 'false';
-    nameEl.removeEventListener('blur', commit);
-    nameEl.removeEventListener('keydown', onKey);
-    const layer = state.annotations.layers.find(l => l.id === id);
-    const next  = nameEl.textContent.trim();
-    if (layer && next && next !== layer.name) {
+  let done = false;
+  const finish = (keep) => {
+    if (done) return;
+    done = true;
+    const next = input.value.trim();
+    if (keep && next && next !== layer.name) {
       pushHistory();
       layer.name = next;
       refreshLayerList();
       scheduleSave();
-    } else if (layer) {
-      nameEl.textContent = layer.name;
     }
+    renderLayerStrip({ id, part: 'name' });
   };
-  const onKey = (e) => {
-    if (e.key === 'Enter')  { e.preventDefault(); nameEl.blur(); }
-    if (e.key === 'Escape') { e.preventDefault(); nameEl.textContent = state.annotations.layers.find(l => l.id === id)?.name || ''; nameEl.blur(); }
-  };
-  nameEl.addEventListener('blur', commit);
-  nameEl.addEventListener('keydown', onKey);
+  input.addEventListener('blur', () => finish(true));
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation(); // the map's Esc / Backspace shortcuts don't apply while typing a name
+    if (e.key === 'Enter')  { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
 }
 
 btnLayerAdd.addEventListener('click', addLayer);

@@ -5,7 +5,7 @@
 // localStorage as before. Older versions saved annotations to localStorage: moved over on first load.
 
 import { state } from './state.js';
-import { DEFAULT_MARK, generateId, PIN_MARKS } from './utils.js';
+import { DEFAULT_MARK, DEFAULT_REGION_COLOR, generateId, PIN_MARKS } from './utils.js';
 import { imageRecord } from './image.js';
 import { FORMAT, VERSION } from './project.js';
 
@@ -238,7 +238,7 @@ export function sanitizeAnnotations(data) {
     layers: list(data?.layers).map(l => ({ id: id(l.id), name: str(l.name, 'Layer') })),
     regions: list(data?.regions).map(r => nesting(r, {
       ...base(r),
-      color:    HEX_COLOR.test(r.color) ? r.color : '#4a9eff',
+      color:    HEX_COLOR.test(r.color) ? r.color : DEFAULT_REGION_COLOR,
       polygons: (Array.isArray(r.polygons) ? r.polygons : [])
         .filter(Array.isArray)
         .map(ring => ring.map(toPoint).filter(Boolean))

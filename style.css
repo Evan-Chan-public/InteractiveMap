@@ -4,19 +4,56 @@
   padding: 0;
 }
 
+/* THEME — a bound field book: a peat-leather rail (tools), a vellum leaf (a place's note), and the
+   map lying open between them. Light is vellum by daylight; dark is "peat by firelight" */
+
 :root {
-  --panel-width: 220px;
-  --detail-width: 420px;
-  --header-height: 0px;
-  --bg: #1a1a1a;
-  --panel-bg: #242424;
-  --panel-border: #333;
-  --text: #e0e0e0;
-  --text-muted: #888;
-  --accent: #4a9eff;
-  --btn-bg: #2e2e2e;
-  --btn-hover: #3a3a3a;
-  --btn-active: #4a9eff;
+  --panel-width:  220px;
+  --detail-width: clamp(300px, 32vw, 420px);
+
+  --font-ui:      'Alegreya', 'Iowan Old Style', Georgia, serif;
+  --font-label:   'Alegreya SC', 'Alegreya', Georgia, serif;
+  --font-display: 'Uncial Antiqua', 'Alegreya', Georgia, serif;
+  --font-code:    ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* the table the map lies on, and the vellum leaf */
+  --ground:      oklch(0.86 0.03 78);
+  --leaf:        oklch(0.955 0.02 85);
+  --leaf-raised: oklch(0.985 0.01 85);
+  --leaf-sunk:   oklch(0.915 0.026 82);
+  --ink:         oklch(0.27 0.035 50);
+  --ink-soft:    oklch(0.43 0.04 55);
+  --rule:        oklch(0.82 0.03 78);
+  --rule-strong: oklch(0.58 0.04 62);
+
+  /* the peat-leather rail */
+  --leather:        oklch(0.32 0.042 48);
+  --leather-deep:   oklch(0.27 0.038 46);
+  --leather-raised: oklch(0.37 0.045 50);
+  --leather-rule:   oklch(0.45 0.045 52);
+  --on-leather:     oklch(0.93 0.025 85);
+  --on-leather-soft: oklch(0.80 0.035 78);
+
+  /* pigments: gilt marks what's chosen, oxblood what needs care (focus, deleting), woad what links */
+  --gilt:      oklch(0.74 0.12 80);
+  --gilt-line: oklch(0.55 0.1 75);
+  --oxblood:   oklch(0.45 0.15 27);
+  --woad:      oklch(0.43 0.1 258);
+  --on-pigment: oklch(0.97 0.015 85);
+  --rubric:       oklch(0.45 0.15 27);  /* the illuminator's red: stays deep in both themes */
+  --gilt-letter:  oklch(0.66 0.13 78);
+
+  --focus:  var(--oxblood);
+  --danger: var(--oxblood);
+  --wash-woad: color-mix(in oklch, var(--woad) 10%, var(--leaf));
+
+  --shadow-tab:   0 1px 1px oklch(0.3 0.04 50 / 0.14), 0 3px 8px oklch(0.3 0.04 50 / 0.16);
+  --shadow-sheet: 0 -2px 4px oklch(0.3 0.04 50 / 0.08), 0 -8px 28px oklch(0.3 0.04 50 / 0.2);
+
+  /* paper grain: a faint fibre noise, never strong enough to sit behind reading */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.25 0 0 0 0 0.12 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  /* a two-strand plait for the rule under a place's name */
+  --knot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='8' viewBox='0 0 24 8'%3E%3Cpath d='M0,1.60 1,1.68 2,1.92 3,2.30 4,2.80 5,3.38 6,4.00 7,4.62 8,5.20 9,5.70 10,6.08 11,6.32 12,6.40 13,6.32 14,6.08 15,5.70 15.8,5.31 M20.2,2.69 21,2.30 22,1.92 23,1.68 24,1.60 M0,6.40 1,6.32 2,6.08 3,5.70 3.8,5.31 M8.2,2.69 9,2.30 10,1.92 11,1.68 12,1.60 13,1.68 14,1.92 15,2.30 16,2.80 17,3.38 18,4.00 19,4.62 20,5.20 21,5.70 22,6.08 23,6.32 24,6.40' fill='none' stroke='black' stroke-width='1.3' stroke-linecap='round'/%3E%3C/svg%3E");
 
   /* lettering on the map itself: iron-gall ink with a vellum halo, so names read on any image */
   --map-ink:        #2a1c12;
@@ -24,15 +61,85 @@
   --map-halo:       #f3ead6;
   --map-gilt:       #b0832a;
   --map-label-font: 'IM Fell English', 'Iowan Old Style', Georgia, serif;
+
+  --ease-ink: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --tick:    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235a4232' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:      oklch(0.2 0.028 50);
+    --leaf:        oklch(0.235 0.02 55);
+    --leaf-raised: oklch(0.2 0.017 55);
+    --leaf-sunk:   oklch(0.28 0.022 55);
+    --ink:         oklch(0.91 0.025 85);
+    --ink-soft:    oklch(0.76 0.03 78);
+    --rule:        oklch(0.34 0.022 55);
+    --rule-strong: oklch(0.52 0.03 62);
+
+    --leather:        oklch(0.215 0.03 42);
+    --leather-deep:   oklch(0.18 0.026 42);
+    --leather-raised: oklch(0.27 0.034 44);
+    --leather-rule:   oklch(0.36 0.035 46);
+
+    --gilt:      oklch(0.78 0.12 82);
+    --gilt-line: oklch(0.72 0.11 80);
+    --oxblood:   oklch(0.7 0.15 28);
+    --woad:      oklch(0.76 0.09 255);
+    --on-pigment: oklch(0.2 0.02 50);
+    --rubric:       oklch(0.52 0.16 28);
+    --gilt-letter:  oklch(0.8 0.12 82);
+
+    --shadow-tab:   0 1px 1px oklch(0 0 0 / 0.3), 0 3px 10px oklch(0 0 0 / 0.35);
+    --shadow-sheet: 0 -2px 4px oklch(0 0 0 / 0.2), 0 -8px 28px oklch(0 0 0 / 0.45);
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9cbb0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
 }
 
 html, body {
   height: 100%;
   overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, sans-serif;
-  font-size: 14px;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.4;
+  caret-color: var(--oxblood);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: color-mix(in oklch, var(--gilt) 45%, transparent); color: inherit; }
+
+* { scrollbar-width: thin; scrollbar-color: var(--rule-strong) transparent; }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* one focus language across the frame: an oxblood rule set just off the control */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* LAYOUT */
@@ -41,6 +148,7 @@ body {
   display: flex;
   flex-direction: row;
   height: 100vh;
+  height: 100dvh;
 }
 
 /* PANELS */
@@ -48,78 +156,139 @@ body {
 .panel {
   display: flex;
   flex-direction: column;
-  background: var(--panel-bg);
-  border-color: var(--panel-border);
   flex-shrink: 0;
   overflow: hidden;
 }
 
-.panel-left {
-  width: var(--panel-width);
-  border-right: 1px solid var(--panel-border);
-  overflow-y: auto; /* the tool groups outgrow short windows */
+/* the trail of places a place sits in, heading the leaf; the close button sits at its end */
+.detail-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 2px;
+  min-width: 0;
+  margin-right: auto;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink);
 }
 
+.detail-trail > .icon { width: 14px; height: 14px; color: var(--ink-soft); margin-right: 2px; }
+.detail-trail .tree-link { font-style: italic; }
+
+/* nothing to show in the header (the layer list has its own title): no empty bar */
+.panel-right.is-list .panel-header { display: none; }
+.panel-right .panel-header { justify-content: flex-end; }
+
+/* the rail: peat leather, lettered in vellum */
+.panel-left {
+  width: var(--panel-width);
+  overflow-y: auto; /* the tool groups outgrow short windows */
+  background: var(--grain), linear-gradient(90deg, var(--leather-deep), var(--leather) 14px, var(--leather));
+  color: var(--on-leather);
+  border-right: 1px solid var(--leather-deep);
+  --focus: var(--gilt);
+}
+
+/* the leaf: vellum, worn a little at the edge */
 .panel-right {
   width: var(--detail-width);
-  border-left: 1px solid var(--panel-border);
+  background: var(--grain), var(--leaf);
+  border-left: 1px solid var(--rule-strong);
+  box-shadow: inset 6px 0 14px -10px oklch(0.3 0.05 50 / 0.35);
 }
 
 .panel-header {
-  padding: 12px 14px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 46px;
+  padding: 6px 8px 6px 16px;
+  font-family: var(--font-label);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule);
   flex-shrink: 0;
 }
+
+.rail-header {
+  border-bottom-color: var(--leather-rule);
+  color: var(--on-leather-soft);
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--gilt);
+}
+
+.panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.panel-close:hover { background: var(--leaf-sunk); border-color: var(--rule); }
+.rail-header .panel-close { display: none; } /* the rail only closes where it's a drawer (phones) */
+.rail-header .panel-close:hover { background: var(--leather-raised); border-color: var(--leather-rule); }
 
 .hidden {
   display: none !important;
 }
 
-/* TOOL BUTTONS */
+/* TOOL BUTTONS (on the leather) */
 
 .tool-group {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 10px;
-  border-bottom: 1px solid var(--panel-border);
+  padding: 12px 12px;
+  border-bottom: 1px solid var(--leather-rule);
 }
 
 .tool-btn {
-  background: var(--btn-bg);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
-  border-radius: 5px;
-  padding: 8px 10px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s;
-  font-size: 13px;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 9px;
+  min-height: 36px;
+  padding: 7px 11px;
+  background: var(--leather-raised);
+  color: var(--on-leather);
+  border: 1px solid var(--leather-rule);
+  border-radius: 3px;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
-.tool-btn svg {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  opacity: 0.85;
-}
+.tool-btn .icon { opacity: 0.9; }
 
 .tool-btn:hover {
-  background: var(--btn-hover);
+  background: color-mix(in oklch, var(--leather-raised), var(--on-leather) 9%);
+  border-color: color-mix(in oklch, var(--leather-rule), var(--on-leather) 20%);
 }
 
+/* the tool in hand is gilded */
 .tool-btn.active {
-  background: var(--btn-active);
-  color: #fff;
-  border-color: var(--btn-active);
+  background: var(--gilt);
+  color: oklch(0.24 0.04 50);
+  border-color: color-mix(in oklch, var(--gilt), black 25%);
 }
 
 .tool-row {
@@ -135,49 +304,58 @@ body {
 /* MAP FILE */
 
 .link-notice {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.4;
-  color: var(--text);
-  background: rgba(74, 158, 255, 0.12);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  padding: 6px 8px;
+  color: var(--ink);
+  background: var(--leaf);
+  border: 1px solid var(--woad);
+  border-radius: 3px;
+  padding: 7px 9px;
+  --focus: var(--oxblood);
 }
 
+.link-notice .btn-link { color: var(--woad); font-size: 14px; }
+
 .wand-status.error {
-  color: #e05555;
+  color: var(--oxblood);
+}
+
+.panel-left .wand-status.error {
+  color: oklch(0.82 0.1 35);
 }
 
 .confirm-dialog {
   margin: auto;
-  max-width: 380px;
-  padding: 16px 18px;
-  background: var(--panel-bg);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
+  max-width: min(400px, calc(100vw - 32px));
+  padding: 18px 20px 16px;
+  background: var(--grain), var(--leaf);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  box-shadow: 0 2px 4px oklch(0 0 0 / 0.15), 0 12px 36px oklch(0 0 0 / 0.3);
 }
 
 .confirm-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.5);
+  background: oklch(0.2 0.03 50 / 0.5);
 }
 
 .dialog-title {
-  font-size: 15px;
-  margin-bottom: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 6px;
 }
 
 .dialog-message {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.45;
-  color: var(--text-muted);
-  margin-bottom: 14px;
+  color: var(--ink-soft);
+  margin-bottom: 16px;
 }
 
 .dialog-buttons {
   display: flex;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
 }
 
 .dialog-buttons .btn-secondary {
@@ -188,6 +366,7 @@ body {
 
 #map-container {
   flex: 1;
+  min-width: 0;
   position: relative;
   overflow: hidden;
 }
@@ -195,8 +374,32 @@ body {
 #map {
   width: 100%;
   height: 100%;
-  background: #111;
+  background: var(--ground);
+  font-family: var(--font-ui);
 }
+
+/* FLOATING CONTROLS — small vellum tabs laid on the map */
+
+#btn-mode, #btn-share, #btn-tools, #layer-add, .layer-chip,
+.leaflet-bar, #share-dialog, .map-banner {
+  background: var(--leaf);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  box-shadow: var(--shadow-tab);
+}
+
+/* settles in once on load, like ink taking to the page */
+@keyframes ink-settle {
+  from { opacity: 0; filter: blur(3px); transform: translateY(-3px); }
+}
+
+#layer-strip, #mode-toggle > div, .leaflet-control-zoom {
+  animation: ink-settle 0.7s var(--ease-ink) both;
+}
+#layer-strip           { animation-delay: 0.08s; }
+#mode-toggle > div     { animation-delay: 0.16s; }
+.leaflet-control-zoom  { animation-delay: 0.24s; }
 
 /* MODE TOGGLE */
 
@@ -207,144 +410,117 @@ body {
   z-index: 1000;
   display: flex;
   gap: 6px;
-  align-items: flex-start;
+  align-items: flex-end;
   flex-direction: column;
 }
 
+#mode-toggle > div {
+  display: flex;
+  gap: 6px;
+}
 
-#btn-mode, #btn-share {
-  background: var(--panel-bg);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
-  border-radius: 5px;
-  padding: 7px 12px;
+#btn-mode, #btn-share, #btn-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 15px;
   cursor: pointer;
-  font-size: 12px;
   transition: background 0.15s;
 }
 
-#btn-mode:hover, #btn-share:hover {
-  background: var(--btn-hover);
+#btn-mode:hover, #btn-share:hover, #btn-tools:hover {
+  background: var(--leaf-sunk);
 }
 
 #share-dialog {
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  padding: 10px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 360px;
-  max-width: calc(100vw - 40px);
+  width: 380px;
+  max-width: calc(100vw - 24px);
+  background: var(--grain), var(--leaf);
 }
 
 .share-lock-label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 7px;
+  font-size: 14px;
   cursor: pointer;
 }
+
 
 .share-url-row {
   display: flex;
   gap: 6px;
 }
 
-#share-url {
-  flex: 1;
-  font-size: 11px;
-  padding: 5px 7px;
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-  background: var(--input-bg, var(--panel-bg));
-  color: var(--text);
+#share-url, #share-file-src, #share-file-url {
   min-width: 0;
+  padding: 6px 8px;
+  font-size: 14px;
+  background: var(--leaf-raised);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
 }
 
-#share-copy {
-  flex-shrink: 0;
+#share-url, #share-file-url {
+  flex: 1;
+  font-family: var(--font-code);
   font-size: 12px;
-  padding: 5px 10px;
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-  background: var(--panel-bg);
-  color: var(--text);
+}
+
+#share-copy, #share-file-copy {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 14px;
+  background: var(--leaf);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
   cursor: pointer;
 }
 
-#share-copy:hover { background: var(--btn-hover); }
-
-.share-section-title {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.share-section-title:not(:first-child) {
-  margin-top: 6px;
-  padding-top: 10px;
-  border-top: 1px solid var(--panel-border);
-}
-
-#share-file-src {
-  font-size: 12px;
-  padding: 5px 7px;
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-  background: var(--input-bg, var(--panel-bg));
-  color: var(--text);
-}
-
-#share-file-url {
-  flex: 1;
-  font-size: 11px;
-  padding: 5px 7px;
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-  background: var(--input-bg, var(--panel-bg));
-  color: var(--text);
-  min-width: 0;
-}
-
-#share-file-copy {
-  flex-shrink: 0;
-  font-size: 12px;
-  padding: 5px 10px;
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-  background: var(--panel-bg);
-  color: var(--text);
-  cursor: pointer;
-}
+#share-copy:hover, #share-file-copy:hover:not(:disabled) { background: var(--leaf-sunk); }
 
 #share-file-copy:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
+.share-section-title {
+  font-family: var(--font-label);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+
+.share-section-title:not(:first-child) {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+
 .map-banner {
   position: absolute;
-  top: 56px;
+  top: 58px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
-  max-width: 70%;
-  background: var(--panel-bg);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
+  max-width: min(70%, 520px);
   padding: 8px 14px;
-  font-size: 13px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  font-size: 15px;
 }
 
 .share-note {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-soft);
   margin: 0;
 }
 
@@ -353,94 +529,151 @@ body {
 #layer-strip {
   position: absolute;
   top: 12px;
-  left: 52px; /* clear Leaflet's zoom control */
+  left: 56px; /* clear Leaflet's zoom control */
   z-index: 1000;
   display: flex;
   align-items: center;
   gap: 6px;
-  max-width: calc(100% - 320px); /* leave room for mode/share cluster on the right */
+  max-width: calc(100% - 340px); /* leave room for mode/share cluster on the right */
 }
 
 /* phones: the strip takes its own row under the mode buttons instead of squeezing beside them */
 @media (max-width: 640px) {
   #layer-strip {
-    top: 54px;
-    max-width: calc(100% - 64px);
+    top: 58px;
+    max-width: calc(100% - 68px);
   }
 }
 
 #layer-chips {
   display: flex;
-  gap: 4px;
+  gap: 5px;
   overflow-x: auto;
-  scrollbar-width: thin;
-  padding-bottom: 2px;
+  padding: 2px 2px 6px; /* room for the tabs' shadow */
+  margin-bottom: -4px;
 }
 
 .layer-chip {
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: var(--panel-bg);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
-  border-radius: 5px;
-  padding: 5px 8px;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s;
   flex-shrink: 0;
+  white-space: nowrap;
   user-select: none;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
-.layer-chip:hover { background: var(--btn-hover); }
+.layer-chip:hover { background: var(--leaf-sunk); }
 
+/* the layer in hand: a gilt rule under its name */
 .layer-chip.active {
-  border-color: var(--accent);
-  background: var(--btn-hover);
+  border-color: var(--gilt-line);
+  box-shadow: var(--shadow-tab), inset 0 -3px 0 var(--gilt);
 }
 
 .layer-chip-name {
-  outline: none;
+  min-height: 32px;
+  padding: 4px 10px;
+  background: none;
+  border: none;
+  font-size: 15px;
+  cursor: pointer;
+  border-radius: 2px;
 }
 
-.layer-chip-name[contenteditable="true"] {
-  background: #1a1a1a;
-  padding: 0 2px;
-  border-radius: 3px;
+.layer-chip.active .layer-chip-name { font-weight: 700; }
+
+.layer-chip-input {
+  width: 9em;
+  margin: 3px 4px;
+  padding: 2px 6px;
+  font-size: 15px;
+  background: var(--leaf-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
 }
 
+.layer-chip-eye,
 .layer-chip-close {
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1;
-  padding: 0 2px;
-  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 3px;
+  background: none;
+  border: none;
+  border-radius: 2px;
+  color: var(--ink-soft);
+  cursor: pointer;
 }
 
-.layer-chip-close:hover { color: #ff6b6b; background: #1a1a1a; }
+.layer-chip-eye .icon, .layer-chip-close .icon,
+.layer-chip-eye svg, .layer-chip-close svg { width: 14px; height: 14px; }
+
+.layer-chip-eye:hover   { color: var(--ink); background: var(--leaf-sunk); }
+.layer-chip-close:hover { color: var(--danger); background: var(--leaf-sunk); }
 
 .layer-chip-close.confirm {
-  color: #ff6b6b;
-  background: #1a1a1a;
+  color: var(--on-pigment);
+  background: var(--danger);
 }
 
 .layer-chip.dragging { opacity: 0.4; }
-.layer-chip.drag-over { border-color: var(--accent); }
+.layer-chip.drag-over { border-color: var(--gilt-line); }
 
 #layer-add {
-  background: var(--panel-bg);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
-  border-radius: 5px;
-  padding: 4px 9px;
-  font-size: 14px;
-  cursor: pointer;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 4px;
+  font-size: 18px;
+  cursor: pointer;
 }
 
-#layer-add:hover { background: var(--btn-hover); }
+#layer-add:hover { background: var(--leaf-sunk); }
+
+/* LEAFLET CHROME — zoom, tooltips */
+
+.leaflet-bar { overflow: hidden; }
+
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: transparent;
+  color: var(--ink);
+  border-bottom-color: var(--rule);
+  font-family: var(--font-ui);
+}
+
+.leaflet-bar a:hover { background: var(--leaf-sunk); }
+.leaflet-bar a.leaflet-disabled { background: transparent; color: var(--rule-strong); }
+
+.leaflet-container .leaflet-control-zoom { margin: 12px 0 0 12px; }
+
+.leaflet-container a.leaflet-control-zoom-in:focus-visible,
+.leaflet-container a.leaflet-control-zoom-out:focus-visible {
+  outline-offset: -3px;
+}
+
+/* a region's name, lettered on a slip rather than in a stock tooltip box */
+.leaflet-tooltip {
+  padding: 3px 8px 2px;
+  background: var(--map-halo);
+  color: var(--map-ink);
+  border: 1px solid color-mix(in oklch, var(--map-ink) 35%, transparent);
+  border-radius: 2px;
+  box-shadow: 0 1px 1px oklch(0.3 0.04 50 / 0.15), 0 2px 6px oklch(0.3 0.04 50 / 0.2);
+  font-family: var(--map-label-font);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+
+.leaflet-tooltip-top::before    { border-top-color: var(--map-halo); }
+.leaflet-tooltip-bottom::before { border-bottom-color: var(--map-halo); }
+.leaflet-tooltip-left::before   { border-left-color: var(--map-halo); }
+.leaflet-tooltip-right::before  { border-right-color: var(--map-halo); }
 
 /* Dimmed annotations for non-active layers (regions + pins) */
 .leaflet-overlay-pane svg .layer-dim,
@@ -452,6 +685,15 @@ body {
 .leaflet-pane > svg path.leaflet-interactive.layer-dim,
 .leaflet-marker-icon.leaflet-interactive.layer-dim {
   pointer-events: none;
+}
+
+/* a region reached by keyboard: a dashed oxblood boundary, like the pins' surveyor's circle */
+.leaflet-pane > svg path.leaflet-interactive:focus { outline: none; }
+.leaflet-pane > svg path.leaflet-interactive:focus-visible {
+  stroke: var(--map-ink-hover);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 4;
+  stroke-opacity: 1;
 }
 
 /* PLACE MARKS — pins lettered onto the map: an inked mark with the name beside it.
@@ -539,10 +781,6 @@ body {
 /* faded places keep their mark but drop the name, so other layers don't crowd the map */
 .place-mark.layer-dim .place-label { display: none; }
 
-@media (prefers-reduced-motion: reduce) {
-  .place-label { transition: none; }
-}
-
 /* display mode: the region you drilled into frames its children (outlined, not clickable) */
 .leaflet-pane > svg path.leaflet-interactive.drill-frame {
   pointer-events: none;
@@ -558,8 +796,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 24px;
   text-align: center;
-  color: var(--text-muted);
+  font-size: 17px;
+  font-style: italic;
+  color: var(--ink-soft);
   pointer-events: none;
   z-index: 500;
   line-height: 1.6;
@@ -577,101 +818,161 @@ body {
   gap: 10px;
 }
 
-/* DETAIL PANEL */
+/* DETAIL PANEL — the leaf */
 
 #detail-tree {
   max-height: 40%;
   overflow-y: auto;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--panel-border);
+  border-bottom: 1px solid var(--rule);
 }
 
 #detail-content {
   flex: 1;
   overflow-y: auto;
-  padding: 14px;
+  padding: 16px 20px 24px;
 }
 
 .detail-empty {
-  color: var(--text-muted);
+  color: var(--ink-soft);
   font-style: italic;
   line-height: 1.6;
 }
 
 #detail-content h2 {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
   margin-bottom: 8px;
 }
 
 #detail-content p {
   line-height: 1.6;
-  color: var(--text);
 }
 
 #detail-content a {
-  color: var(--accent);
+  color: var(--woad);
+  text-underline-offset: 2px;
 }
 
-/* MARKDOWN BODY */
-
+/* a place's name, set in an insular hand above a plaited rule */
 .detail-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   margin-bottom: 6px;
 }
 
-.detail-divider {
-  border: none;
-  border-top: 1px solid var(--panel-border);
-  margin: 0 0 12px;
+#detail-content .detail-view .detail-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+  margin: 2px 0 10px;
 }
 
-.markdown-body { line-height: 1.65; }
-.markdown-body img { max-width: 100%; border-radius: 4px; margin: 4px 0; }
+.detail-divider {
+  height: 8px;
+  margin: 0 0 16px;
+  border: none;
+  background: var(--gilt-line);
+  -webkit-mask: var(--knot) repeat-x left center / 24px 8px;
+          mask: var(--knot) repeat-x left center / 24px 8px;
+  opacity: 0.85;
+}
+
+/* the note opens with an illuminated initial: a gilt letter outlined in the illuminator's red,
+   set in a frame of red dots (rubrication). panel.js drops it through two lines, or enlarges it in
+   line when the note is a single line */
+.initial {
+  font-family: var(--font-display);
+  color: var(--gilt-letter);
+  -webkit-text-stroke: 1.5px var(--rubric);
+  paint-order: stroke fill;
+}
+
+.initial-drop {
+  float: left;
+  position: relative;
+  margin: 7px 14px 0 4px;
+  font-size: 52px;
+  line-height: 40px;
+}
+
+.initial-drop::before {
+  content: '';
+  position: absolute;
+  inset: -6px -8px -7px;
+  border: 2.5px dotted var(--rubric);
+  border-radius: 4px;
+}
+
+.initial-inline {
+  font-size: 1.7em;
+  line-height: 0;
+  margin-right: 1px;
+}
+
+.detail-empty-body {
+  color: var(--ink-soft);
+}
+
+/* the leaf opens with a short settle; on a phone it rises from below */
+@keyframes leaf-open {
+  from { opacity: 0; transform: translateX(10px); }
+}
+
+.panel-right:not(.hidden) { animation: leaf-open 0.35s var(--ease-ink); }
+
+/* MARKDOWN BODY */
+
+.markdown-body { line-height: 1.65; font-size: 16px; max-width: 68ch; }
+.markdown-body img { max-width: 100%; border-radius: 2px; margin: 4px 0; }
 .markdown-body h1, .markdown-body h2, .markdown-body h3,
 .markdown-body h4, .markdown-body h5, .markdown-body h6 {
-  font-weight: 600;
-  margin: 12px 0 4px;
-  color: var(--text);
+  font-weight: 700;
+  margin: 18px 0 4px;
+  color: var(--ink);
 }
-.markdown-body h1 { font-size: 15px; }
-.markdown-body h2 { font-size: 14px; }
+.markdown-body h1 { font-size: 19px; }
+.markdown-body h2 { font-size: 17px; }
 .markdown-body h3, .markdown-body h4,
-.markdown-body h5, .markdown-body h6 { font-size: 13px; }
-.markdown-body p  { margin: 0 0 8px; }
-.markdown-body ul, .markdown-body ol { padding-left: 18px; margin: 0 0 8px; }
+.markdown-body h5, .markdown-body h6 { font-size: 16px; font-style: italic; }
+.markdown-body p  { margin: 0 0 10px; }
+.markdown-body ul, .markdown-body ol { padding-left: 20px; margin: 0 0 10px; }
 .markdown-body li { margin: 2px 0; }
+.markdown-body li::marker { color: var(--gilt-line); }
 .markdown-body blockquote {
-  border-left: 3px solid var(--accent);
-  margin: 0 0 8px;
-  padding: 4px 10px;
-  color: var(--text-muted);
+  margin: 0 0 10px;
+  padding: 2px 0 2px 14px;
+  border-left: 1px solid var(--rule-strong);
+  font-style: italic;
+  color: var(--ink-soft);
 }
 .markdown-body code {
-  background: #111;
-  border-radius: 3px;
+  background: var(--leaf-sunk);
+  border-radius: 2px;
   padding: 1px 5px;
-  font-size: 12px;
-  font-family: monospace;
+  font-size: 13px;
+  font-family: var(--font-code);
 }
 .markdown-body pre {
-  background: #111;
-  border-radius: 4px;
+  background: var(--leaf-sunk);
+  border-radius: 3px;
   padding: 8px 10px;
   overflow-x: auto;
-  margin: 0 0 8px;
+  margin: 0 0 10px;
 }
 .markdown-body pre code { background: none; padding: 0; }
-.markdown-body a  { color: var(--accent); }
-.markdown-body hr { border: none; border-top: 1px solid var(--panel-border); margin: 10px 0; }
-.markdown-body table { border-collapse: collapse; width: 100%; margin: 0 0 8px; font-size: 12px; }
+.markdown-body a  { color: var(--woad); text-underline-offset: 2px; }
+.markdown-body hr { border: none; border-top: 1px solid var(--rule); margin: 14px 0; }
+.markdown-body table { border-collapse: collapse; width: 100%; margin: 0 0 10px; font-size: 14px; font-variant-numeric: tabular-nums; }
 .markdown-body th, .markdown-body td {
-  border: 1px solid var(--panel-border);
+  border: 1px solid var(--rule);
   padding: 4px 8px;
   text-align: left;
 }
-.markdown-body th { background: var(--btn-bg); }
+.markdown-body th { background: var(--leaf-sunk); font-weight: 700; }
 
 /* DETAIL EDITOR */
 
@@ -682,38 +983,51 @@ body {
 }
 
 .field-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  margin-top: 6px;
+  font-family: var(--font-label);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  margin-top: 8px;
 }
 
+.panel-left .field-label { color: var(--on-leather-soft); margin-top: 0; }
+
 .field-hint {
+  font-family: var(--font-ui);
   font-weight: 400;
-  text-transform: none;
+  font-style: italic;
   letter-spacing: 0;
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .field-input,
 .field-textarea {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-  padding: 7px 8px;
-  font-size: 13px;
-  font-family: inherit;
   width: 100%;
-  outline: none;
-  transition: border-color 0.15s;
+  padding: 7px 9px;
+  background: var(--leaf-raised);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  font-size: 15px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.field-input:focus,
-.field-textarea:focus {
-  border-color: var(--accent);
+.field-input::placeholder,
+.field-textarea::placeholder { color: var(--ink-soft); font-style: italic; opacity: 1; }
+
+.field-input:focus-visible,
+.field-textarea:focus-visible {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus);
+}
+
+/* fields on the leather read as vellum slips */
+.panel-left .field-input {
+  background: var(--leaf);
+  border-color: var(--leather-deep);
+  --focus: var(--gilt);
 }
 
 .field-textarea {
@@ -724,143 +1038,159 @@ body {
 
 .editor-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .btn-danger {
+  min-height: 32px;
+  padding: 5px 12px;
   background: transparent;
-  color: #e05555;
-  border: 1px solid #e05555;
-  border-radius: 4px;
-  padding: 5px 10px;
-  font-size: 12px;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 3px;
+  font-size: 14px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .btn-danger:hover,
 .btn-danger.armed {
-  background: #e05555;
-  color: #fff;
+  background: var(--danger);
+  color: var(--on-pigment);
 }
 
 .swatch-details {
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
   overflow: hidden;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .swatch-summary {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 8px;
+  min-height: 36px;
+  padding: 5px 10px;
   cursor: pointer;
   list-style: none;
   user-select: none;
 }
 
+.swatch-summary .field-label { margin: 0; }
 .swatch-summary::-webkit-details-marker { display: none; }
+.swatch-summary:hover { background: var(--leaf-sunk); }
 
-.swatch-summary:hover { background: var(--btn-hover); }
+.swatch-name {
+  font-style: italic;
+  color: var(--ink-soft);
+}
 
 .color-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  border: 1px solid rgba(255,255,255,0.2);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in oklch, var(--ink) 30%, transparent);
   flex-shrink: 0;
 }
 
 .swatch-grid {
   display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  gap: 2px;
-  padding: 6px;
-  border-top: 1px solid var(--panel-border);
+  grid-template-columns: repeat(9, minmax(0, 36px));
+  gap: 4px;
+  padding: 8px;
+  border-top: 1px solid var(--rule);
 }
 
+/* a flat disc of pigment with a hairline ink edge */
 .swatch {
   aspect-ratio: 1;
-  border-radius: 3px;
-  cursor: pointer;
-  border: 1.5px solid transparent;
-  transition: border-color 0.1s, transform 0.1s;
   min-width: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid color-mix(in oklch, var(--ink) 35%, transparent);
+  transition: transform 0.12s var(--ease-ink);
 }
 
 .swatch:hover {
-  border-color: rgba(255,255,255,0.7);
-  transform: scale(1.12);
+  transform: scale(1.1);
   z-index: 1;
   position: relative;
 }
 
 .swatch.active {
-  border-color: #fff;
-  box-shadow: 0 0 0 1.5px var(--accent);
+  outline: 2px solid var(--gilt-line);
+  outline-offset: 2px;
 }
 
+.swatch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
 .swatch-custom {
-  background: var(--btn-bg);
-  color: var(--text-muted);
-  font-size: 13px;
-  border-color: var(--panel-border);
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--leaf-sunk);
+  color: var(--ink-soft);
+  border-radius: 50%;
 }
 
 .swatch-custom:hover {
-  background: var(--btn-hover);
-  border-color: rgba(255,255,255,0.5);
+  color: var(--ink);
   transform: none;
 }
 
 .field-range {
   width: 100%;
-  accent-color: var(--accent);
+  accent-color: var(--gilt);
   cursor: pointer;
 }
 
 .wand-status {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--ink-soft);
   min-height: 16px;
   margin-top: 2px;
 }
 
+.panel-left .wand-status { color: var(--on-leather-soft); }
+
 .btn-secondary {
+  min-height: 32px;
+  padding: 5px 12px;
   background: transparent;
-  color: var(--text);
-  border: 1px solid var(--text-muted);
-  border-radius: 4px;
-  padding: 5px 10px;
-  font-size: 12px;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  font-size: 14px;
   cursor: pointer;
   margin-right: 6px;
   transition: background 0.15s, color 0.15s;
 }
 
+.editor-actions .btn-secondary { margin-right: 0; }
+
 .btn-secondary:hover {
-  background: var(--text-muted);
-  color: var(--bg);
+  background: var(--leaf-sunk);
 }
 
+.panel-left .btn-danger { color: oklch(0.82 0.1 35); border-color: oklch(0.82 0.1 35); }
+.panel-left .btn-danger:hover { background: oklch(0.82 0.1 35); color: var(--leather-deep); }
+
 .merge-banner {
-  background: rgba(74, 158, 255, 0.12);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 1.4;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--wash-woad);
+  border: 1px solid var(--woad);
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .color-wheel {
@@ -868,8 +1198,8 @@ body {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--accent);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--woad);
+  border: 1px solid color-mix(in oklch, var(--ink) 30%, transparent);
   vertical-align: middle;
   flex-shrink: 0;
 }
@@ -877,10 +1207,10 @@ body {
 /* pin marks in the panel: the same symbols, in panel colours */
 .row-mark,
 .mark-option {
-  --map-halo: var(--panel-bg);
+  --map-halo: var(--leaf);
   display: inline-flex;
   flex-shrink: 0;
-  color: var(--text);
+  color: var(--ink);
 }
 
 .mark-picker {
@@ -891,25 +1221,20 @@ body {
 .mark-option {
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 30px;
-  background: var(--btn-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
+  width: 40px;
+  height: 34px;
+  background: var(--leaf-raised);
+  --map-halo: var(--leaf-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
   cursor: pointer;
 }
 
-.mark-option:hover { background: var(--btn-hover); }
-
-.mark-option:focus-visible {
-  outline: 2px solid var(--map-gilt);
-  outline-offset: 2px;
-}
+.mark-option:hover { background: var(--leaf-sunk); --map-halo: var(--leaf-sunk); }
 
 .mark-option.active {
-  --map-halo: var(--btn-bg);
-  border-color: var(--map-gilt);
-  box-shadow: inset 0 0 0 1px var(--map-gilt);
+  border-color: var(--gilt-line);
+  box-shadow: inset 0 0 0 1px var(--gilt-line), inset 0 -3px 0 var(--gilt);
 }
 
 .merge-target-title {
@@ -921,26 +1246,77 @@ body {
 }
 
 .btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  margin: -4px 0 8px -6px;
+  padding: 2px 6px;
   background: none;
   border: none;
-  color: var(--text-muted);
-  font-size: 12px;
+  border-radius: 2px;
+  color: var(--ink-soft);
+  font-size: 15px;
+  font-style: italic;
   cursor: pointer;
-  padding: 0 0 10px;
-  display: block;
-  transition: color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
 
-.btn-back:hover { color: var(--text); }
+.btn-back:hover { color: var(--ink); background: var(--leaf-sunk); }
 
 .btn-link {
   background: none;
   border: none;
-  color: var(--accent);
-  font-size: 12px;
+  color: var(--woad);
+  font-size: 15px;
   cursor: pointer;
   padding: 0;
   text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* BROWSER SURFACES — checkboxes and select arrows drawn from the palette, not the platform's */
+
+input[type="checkbox"] {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  margin: 0;
+  background: var(--leaf-raised);
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+input[type="checkbox"]::before {
+  content: '';
+  width: 11px;
+  height: 11px;
+  background: var(--on-pigment);
+  -webkit-mask: var(--tick) center / contain no-repeat;
+          mask: var(--tick) center / contain no-repeat;
+  transform: scale(0);
+  transition: transform 0.12s var(--ease-ink);
+}
+
+input[type="checkbox"]:checked { background: var(--oxblood); border-color: var(--oxblood); }
+input[type="checkbox"]:checked::before { transform: scale(1); }
+
+.panel-left input[type="checkbox"] { background: var(--leather-deep); border-color: var(--leather-rule); }
+.panel-left input[type="checkbox"]:checked { background: var(--gilt); border-color: var(--gilt); }
+.panel-left input[type="checkbox"]::before { background: oklch(0.24 0.04 50); }
+
+select.field-input {
+  appearance: none;
+  padding-right: 32px;
+  background-image: var(--chevron);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+  cursor: pointer;
 }
 
 /* VISIBILITY TOGGLE */
@@ -948,80 +1324,91 @@ body {
 .field-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 8px;
+  min-height: 30px;
+  font-size: 15px;
   cursor: pointer;
-  color: var(--text);
   margin-top: 4px;
 }
 
-.field-toggle input[type="checkbox"] {
-  accent-color: var(--accent);
-  cursor: pointer;
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-}
 
 /* PIN LIST TOGGLE */
 
 .pin-list {
-  border-bottom: 1px solid var(--panel-border);
-  overflow: hidden;
+  border-bottom: 1px solid var(--rule);
 }
 
 .pin-list-summary {
-  padding: 7px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 12px;
+  font-family: var(--font-label);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
   cursor: pointer;
   user-select: none;
   list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .pin-list-summary::-webkit-details-marker { display: none; }
 
-.pin-list-summary::before {
-  content: '▶';
-  font-size: 8px;
-  transition: transform 0.15s;
-  display: inline-block;
+/* a small inked chevron rather than a glyph */
+.pin-list-summary::before,
+.tree-node > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.2s var(--ease-ink);
 }
 
-.pin-list[open] .pin-list-summary::before {
-  transform: rotate(90deg);
+.pin-list[open] > .pin-list-summary::before,
+.tree-node[open] > summary::before {
+  transform: rotate(45deg);
 }
 
 .pin-list-summary:hover {
-  background: var(--btn-hover);
-  color: var(--text);
+  background: var(--leaf-sunk);
+  color: var(--ink);
 }
 
 .pin-list-item {
-  padding: 6px 10px 6px 24px;
-  font-size: 13px;
-  cursor: pointer;
-  border-top: 1px solid var(--panel-border);
+  font-size: 15px;
+  border-top: 1px solid var(--rule);
   transition: background 0.1s;
 }
 
 .pin-list-item:hover {
-  background: var(--btn-hover);
-  color: var(--accent);
+  background: var(--leaf-sunk);
 }
 
 /* layer list rows (right panel, nothing selected) */
 .item-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-left: 14px;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.item-row-main {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 4px 6px 26px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
 }
 
 .item-row-label {
@@ -1030,85 +1417,105 @@ body {
   white-space: nowrap;
 }
 
-.item-hidden {
-  opacity: 0.5;
+.item-hidden .item-row-label {
   font-style: italic;
+  color: var(--ink-soft);
 }
 
 .row-eye {
-  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
   background: none;
   border: none;
-  color: var(--text-muted);
+  border-radius: 2px;
+  color: var(--ink-soft);
   cursor: pointer;
-  padding: 2px;
-  display: flex;
-  opacity: 0.35;
 }
 
-.item-row:hover .row-eye,
-.view-hidden .row-eye { opacity: 1; }
-.row-eye:hover { color: var(--text); }
-
-.item-row-parent + .row-eye { margin-left: 4px; }
+.row-eye:hover { color: var(--ink); background: var(--leaf); }
 
 .item-row.view-hidden .item-row-label,
-.item-row.view-hidden .color-wheel { opacity: 0.4; }
-
-.layer-chip-eye {
-  display: flex;
-  color: var(--text-muted);
-  padding: 0 1px;
-  border-radius: 3px;
-}
-
-.layer-chip-eye:hover { color: var(--text); background: #1a1a1a; }
-
-.layer-chip.view-hidden .layer-chip-name { opacity: 0.45; text-decoration: line-through; }
+.item-row.view-hidden .color-wheel,
+.item-row.view-hidden .row-mark { opacity: 0.45; }
 
 .item-row-parent {
   margin-left: auto;
-  font-size: 11px;
-  color: var(--text-muted);
+  padding-left: 8px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--ink-soft);
   white-space: nowrap;
 }
 
+.layer-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.layer-tools .detail-title { margin: 0; }
+
+.layer-move {
+  display: flex;
+  gap: 4px;
+}
+
+.layer-move button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.layer-move button:hover:not(:disabled) { background: var(--leaf-sunk); }
+.layer-move button:disabled { opacity: 0.4; cursor: default; }
+
 .renest-actions {
   gap: 6px;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
 /* NESTING TREE (breadcrumb + nested children) */
 
-.tree-crumbs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 10px;
-  font-size: 12px;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.tree-sep { color: var(--text-muted); }
+.tree-sep { color: var(--ink-soft); padding: 0 2px; }
 
 .tree-link {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  min-height: 28px;
+  padding: 0 4px;
+  background: none;
+  border: none;
+  border-radius: 2px;
+  text-align: left;
   cursor: pointer;
-  border-radius: 3px;
 }
 
-.tree-link:hover { color: var(--accent); }
+.tree-link:hover { color: var(--woad); text-decoration: underline; text-underline-offset: 3px; }
 
-.tree-children { padding-left: 12px; }
+.tree-children { padding-left: 14px; }
 
 .tree-leaf,
 .tree-node > summary {
-  padding: 5px 10px;
-  font-size: 13px;
-  border-top: 1px solid var(--panel-border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 15px;
+  border-top: 1px solid var(--rule);
 }
 
 .tree-node > summary {
@@ -1118,27 +1525,15 @@ body {
 }
 
 .tree-node > summary::-webkit-details-marker { display: none; }
+.tree-node > summary::before { color: var(--ink-soft); }
 
-.tree-node > summary::before {
-  content: '▶';
-  font-size: 8px;
-  margin-right: 6px;
-  color: var(--text-muted);
-  display: inline-block;
-  transition: transform 0.15s;
-}
-
-.tree-node[open] > summary::before { transform: rotate(90deg); }
-
-.tree-leaf { padding-left: 24px; }
-
+.tree-leaf { padding-left: 22px; }
 
 .tree-count {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
 }
-
-/* BRUSH CONTROLS (hidden until brush/eraser active — toggled via .hidden class) */
 
 /* VERTEX EDIT HANDLES */
 
@@ -1152,8 +1547,8 @@ body {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #4a9eff;
-  border: 2px solid #fff;
+  background: var(--gilt);
+  border: 2px solid var(--map-ink);
   box-sizing: border-box;
   cursor: move;
 }
@@ -1162,8 +1557,101 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgba(74, 158, 255, 0.45);
-  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  background: color-mix(in oklch, var(--gilt) 55%, transparent);
+  border: 1.5px solid color-mix(in oklch, var(--map-ink) 60%, transparent);
   box-sizing: border-box;
   cursor: pointer;
 }
+
+/* drawing a region by hand: inked vertices joined by a dashed line */
+.leaflet-pane > svg path.draw-vertex { stroke: var(--map-halo); fill: var(--map-ink); fill-opacity: 1; }
+.leaflet-pane > svg path.draw-line   { stroke: var(--map-ink); stroke-opacity: 0.9; }
+.leaflet-pane > svg path.brush-cursor { stroke: var(--map-halo); stroke-opacity: 1; filter: drop-shadow(0 0 1px var(--map-ink)); }
+
+/* PHONES — the map keeps the whole screen: the leaf rises from below as a sheet, the rail is a
+   drawer opened from the Tools tab */
+
+@media (max-width: 640px) {
+  .panel-right {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1100;
+    width: auto;
+    max-height: 48dvh;
+    border-left: none;
+    border-top: 1px solid var(--rule-strong);
+    border-radius: 10px 10px 0 0;
+    box-shadow: var(--shadow-sheet);
+  }
+
+  /* on a phone, the layer list stays out of the way until something is chosen */
+  .panel-right.is-list { display: none; }
+
+  @keyframes sheet-open {
+    from { transform: translateY(24px); opacity: 0; }
+  }
+  .panel-right:not(.hidden) { animation: sheet-open 0.4s var(--ease-ink); }
+
+  .panel-left {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1200;
+    width: min(270px, 86vw);
+    box-shadow: 4px 0 24px oklch(0 0 0 / 0.35);
+    transform: translateX(-105%);
+    visibility: hidden;
+    transition: transform 0.3s var(--ease-ink), visibility 0s 0.3s;
+  }
+
+  body.tools-open .panel-left {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.3s var(--ease-ink);
+  }
+
+  .rail-header .panel-close { display: inline-flex; }
+
+  /* the map dims behind the open drawer; tapping it closes the drawer */
+  body.tools-open::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1150;
+    background: oklch(0.2 0.03 50 / 0.35);
+    animation: ink-fade 0.3s ease;
+  }
+
+  #btn-mode, #btn-share, #btn-tools { font-size: 14px; padding: 6px 10px; }
+  #detail-content { padding: 12px 16px 20px; }
+}
+
+@media (min-width: 641px) {
+  #btn-tools { display: none !important; }
+}
+
+/* fingers: every control at least 44px tall */
+@media (pointer: coarse) {
+  #btn-mode, #btn-share, #btn-tools, #layer-add { min-height: 44px; min-width: 44px; }
+  .layer-chip-name { min-height: 44px; }
+  .layer-chip-eye, .layer-chip-close { width: 36px; height: 44px; margin-right: 0; }
+  .leaflet-touch .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; }
+  .panel-close, .row-eye, .layer-move button { width: 44px; height: 44px; }
+  .item-row-main, .tool-btn, .pin-list-summary, .swatch-summary { min-height: 44px; }
+  .tree-link { min-height: 40px; }
+  .btn-secondary, .btn-danger { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .place-label { transition: none; }
+  #layer-strip, #mode-toggle > div, .leaflet-control-zoom { animation: ink-fade 0.3s ease both; animation-delay: 0s; }
+  .panel-right:not(.hidden) { animation: ink-fade 0.2s ease; }
+  .panel-left { transition: visibility 0s; }
+  body.tools-open .panel-left { transition: none; }
+  .swatch, .pin-list-summary::before, .tree-node > summary::before { transition: none; }
+}
+
+@keyframes ink-fade { from { opacity: 0; } }

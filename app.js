@@ -13,7 +13,7 @@ import { fetchLinkedFile, linkedFile, readShareHash, showBanner } from './share.
 import { map } from './map.js';
 import { redo, undo } from './history.js';
 import { clearSelection, goUp, showLayer } from './selection.js';
-import { activatePinElement, applyLayerVisibility, drillFocus } from './render.js';
+import { activateMapElement, applyLayerVisibility, drillFocus, regionFocusChanged } from './render.js';
 import { renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 import { addPin, cancelRegionDraw, commitRegion, disarmDelete, draw, isDeleteArmed, requestDelete,
@@ -27,6 +27,8 @@ import { scheduleLabelLayout } from './labels.js';
 
 const toolsPanel       = document.getElementById('tools-panel');
 const btnMode          = document.getElementById('btn-mode');
+const btnTools         = document.getElementById('btn-tools');
+const btnToolsClose    = document.getElementById('tools-close');
 const btnRegion        = document.getElementById('tool-region');
 const btnPin           = document.getElementById('tool-pin');
 const btnWand          = document.getElementById('tool-wand');
@@ -41,10 +43,12 @@ const brushControls    = document.getElementById('brush-controls');
 function setMode(mode) {
   if (mode === 'design' && state.ui.shareLocked) return;
   state.mode = mode;
+  btnTools.classList.toggle('hidden', mode !== 'design');
   if (mode === 'design') {
     toolsPanel.classList.remove('hidden');
     btnMode.textContent = 'Switch to Display Mode';
   } else {
+    setToolsOpen(false);
     toolsPanel.classList.add('hidden');
     btnMode.textContent = 'Switch to Design Mode';
     setActiveTool(null);
@@ -62,6 +66,32 @@ function setMode(mode) {
 
 btnMode.addEventListener('click', () => {
   setMode(state.mode === 'design' ? 'display' : 'design');
+});
+
+// PHONES — the tools rail is a drawer over the map, opened from the Tools tab
+
+const phone = window.matchMedia('(max-width: 640px)');
+
+function setToolsOpen(open) {
+  document.body.classList.toggle('tools-open', open);
+  btnTools.setAttribute('aria-expanded', open);
+}
+
+btnTools.addEventListener('click', () => {
+  setToolsOpen(true);
+  toolsPanel.querySelector('button, input')?.focus();
+});
+
+btnToolsClose.addEventListener('click', () => {
+  setToolsOpen(false);
+  btnTools.focus();
+});
+
+phone.addEventListener('change', () => setToolsOpen(false));
+
+// a tap on the dimmed map behind the drawer lands on <body> (the scrim is its ::after)
+document.body.addEventListener('click', (e) => {
+  if (e.target === document.body && document.body.classList.contains('tools-open')) setToolsOpen(false);
 });
 
 // TOOLS
@@ -96,8 +126,12 @@ function setActiveTool(tool) {
   if (tool !== 'edit')   exitVertexEdit();
 }
 
+// on a phone, picking a tool closes the drawer so the map is free to use it
 function wireToolBtn(btn, name) {
-  btn?.addEventListener('click', () => setActiveTool(state.ui.activeTool === name ? null : name));
+  btn?.addEventListener('click', () => {
+    setActiveTool(state.ui.activeTool === name ? null : name);
+    if (phone.matches && state.ui.activeTool) setToolsOpen(false);
+  });
 }
 
 wireToolBtn(btnRegion, 'region');
@@ -134,10 +168,19 @@ map.on('click', (e) => {
 map.on('zoomend moveend resize', scheduleLabelLayout);
 document.fonts?.ready.then(scheduleLabelLayout);
 
-// pins are buttons: Enter or Space selects the focused one (Leaflet only makes them focusable)
+// pins and regions are buttons: Enter or Space selects the focused one (Leaflet only makes them focusable)
 map.getContainer().addEventListener('keydown', (e) => {
-  if ((e.key === 'Enter' || e.key === ' ') && activatePinElement(e.target)) e.preventDefault();
+  if ((e.key === 'Enter' || e.key === ' ') && activateMapElement(e.target)) e.preventDefault();
 });
+
+// a focused region shows its name, and comes into view if it's off screen; the browser's own
+// scroll-into-view would shift the map container out of alignment, so it's undone
+map.getContainer().addEventListener('focusin', (e) => {
+  if (!regionFocusChanged(e.target, true)) return;
+  map.getContainer().scrollTop  = 0;
+  map.getContainer().scrollLeft = 0;
+});
+map.getContainer().addEventListener('focusout', (e) => regionFocusChanged(e.target, false));
 
 map.on('dblclick', (e) => {
   if (state.mode !== 'design') return;
@@ -178,6 +221,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key !== 'Escape') return;
+  if (document.body.classList.contains('tools-open')) { setToolsOpen(false); btnTools.focus(); return; }
   // esc unwinds the innermost thing first; deselect only when nothing else was cancelled
   const busy = draw.active || state.ui.mergeSource || vertexEdit.active || state.ui.activeTool === 'edit'
             || isDeleteArmed();
@@ -194,7 +238,6 @@ document.addEventListener('keydown', (e) => {
 // INIT
 
 initWorker();
-if (typeof lucide !== 'undefined') lucide.createIcons();
 
 // a linked map file (?gist= / ?project=) or a share link opens as a separate map that isn't saved
 // unless it's kept; otherwise the saved map

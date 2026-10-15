@@ -259,9 +259,9 @@ function updateBrushCursor(latlng) {
     brushCursorLayer.setLatLngs(pts.map(p => [p.lat, p.lng]));
   } else {
     brushCursorLayer = L.polygon(pts.map(p => [p.lat, p.lng]), {
-      color:       '#fff',
       weight:      1.5,
       dashArray:   '5 4',
+      className:   'brush-cursor',
       fill:        false,
       interactive: false,
     }).addTo(map);

@@ -74,6 +74,23 @@ function styleItem(type, item, ix) {
     el?.classList.toggle('is-selected', selected);
   }
   if (type === 'pin') stylePinAccess(itemElements('pin', item.id)[0], item, dim, selected);
+  else styleRegionAccess(itemElements('region', item.id), item, dim || frame, selected);
+}
+
+// regions are buttons too: the first ring of a live region is a tab stop named by the place
+// (further rings would repeat it); faded ones and the drill-down frame can't be used
+function styleRegionAccess(els, region, inert, selected) {
+  els.forEach((el, i) => {
+    if (!el) return;
+    if (inert || i > 0) { el.removeAttribute('tabindex'); el.removeAttribute('role'); el.removeAttribute('aria-label'); }
+    else {
+      el.setAttribute('tabindex', '0');
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', region.label || 'Untitled region');
+    }
+    if (selected && !inert && i === 0) el.setAttribute('aria-current', 'true');
+    else el.removeAttribute('aria-current');
+  });
 }
 
 // pins are buttons named by their place (the lettered name may be hidden by labels.js); faded
@@ -98,9 +115,45 @@ function pinAtElement(el) {
   return icon ? state.annotations.pins.find(p => layers.pins[p.id]?.getElement() === icon) : null;
 }
 
-export function activatePinElement(el) {
+function regionAtElement(el) {
+  if (el?.tagName?.toLowerCase() !== 'path') return null;
+  return state.annotations.regions.find(r => itemElements('region', r.id).includes(el)) ?? null;
+}
+
+// Enter / Space on a focused pin or region does what a click does
+export function activateMapElement(el) {
   const pin = pinAtElement(el);
-  return pin ? activatePin(pin) : false;
+  if (pin) return activatePin(pin);
+  const region = regionAtElement(el);
+  return region ? activateRegion(region) : false;
+}
+
+// a region reached by keyboard shows its name, as hovering does
+export function regionFocusChanged(el, focused) {
+  const region = regionAtElement(el);
+  if (!region) return null;
+  layers.regions[region.id]?.eachLayer(poly => {
+    if (poly.getElement() !== el) return;
+    if (!focused) { poly.closeTooltip(); return; }
+    const center = poly.getBounds().getCenter();
+    if (!map.getBounds().contains(center)) map.panTo(center);
+    poly.openTooltip(center);
+  });
+  return region;
+}
+
+// a click on a region, or Enter / Space on a focused one
+function activateRegion(region) {
+  // creation tools and faded items pass the click through to the map
+  if (['pin', 'region', 'wand'].includes(state.ui.activeTool)) return false;
+  if (!isLive(region)) return false;
+  if (state.ui.mergeSource && state.ui.mergeSource !== region.id) {
+    performMerge(state.ui.mergeSource, region.id);
+    return true;
+  }
+  selectAnnotation('region', region.id);
+  if (state.ui.activeTool === 'edit') enterVertexEdit(region.id);
+  return true;
 }
 
 export function applyInteractivity() {
@@ -152,16 +205,7 @@ export function mountRegionLayer(region, single = true) {
   }
 
   group.on('click', (e) => {
-    // creation tools and faded items pass the click through to the map
-    if (['pin', 'region', 'wand'].includes(state.ui.activeTool)) return;
-    if (!isLive(region)) return;
-    L.DomEvent.stopPropagation(e);
-    if (state.ui.mergeSource && state.ui.mergeSource !== region.id) {
-      performMerge(state.ui.mergeSource, region.id);
-      return;
-    }
-    selectAnnotation('region', region.id);
-    if (state.ui.activeTool === 'edit') enterVertexEdit(region.id);
+    if (activateRegion(region)) L.DomEvent.stopPropagation(e);
   });
 
   group.on('mouseover', () => {

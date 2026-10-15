@@ -9,11 +9,14 @@ A lightweight browser-based tool for annotating custom map images. Aims to produ
 ## Modes
 
 ### Display Mode
-The default view. Regions and pins are visible and selectable; clicking them opens a details panel on the right. Design tools are hidden.
+The default view. Regions and pins are visible and selectable; clicking them opens a details panel on the right (on a phone, a sheet rising over the lower half of the map). The panel's **×** closes it. Design tools are hidden. The frame around the map follows your system's light or dark setting.
 
-Clicking a region drills into it: the region stays outlined, its children become clickable (whichever layer they're on), and everything else fades. Selecting something with no children keeps its siblings clickable. `Esc` or the **← parent** button goes up a level; at the top level it returns to browsing the active layer. Clicking the map outside the area you're in (or outside the selected item) deselects and returns to the outermost layer; clicks inside it that miss a child do nothing. Clicking a layer chip leaves the drill-down and browses that layer. Hidden regions are skipped, so their children appear under the next visible ancestor.
+From the keyboard, `Tab` reaches the regions and pins you can use; a dashed oxblood line shows which has focus, a focused region shows its name, and `Enter` or `Space` opens it.
+
+Clicking a region drills into it: the region stays outlined, its children become clickable (whichever layer they're on), and everything else fades. Selecting something with no children keeps its siblings clickable. `Esc` or the back button (named after the parent) goes up a level; at the top level it returns to browsing the active layer. Clicking the map outside the area you're in (or outside the selected item) deselects and returns to the outermost layer; clicks inside it that miss a child do nothing. Clicking a layer chip leaves the drill-down and browses that layer. Hidden regions are skipped, so their children appear under the next visible ancestor.
 
 ### Design Mode
+The tools sit in the left panel. On a phone they're a drawer: open it with **Tools** (top right); picking a tool, tapping the map behind it or `Esc` closes it.
 Toggle with the **Design Mode** button (top-right). Exposes all editing tools and lets you create, modify, and delete annotations.
 
 ---
@@ -57,7 +60,7 @@ With a region selected in the detail panel:
 - **Consolidate**: collapses a multi-ring region (e.g. two disconnected blobs) into a single contiguous polygon by bridging near-touching rings.
 
 ### Color
-Each region has an assigned color, visible as a swatch in the region list and as the fill on the map. Colors can be set to a preset or custom hex value.
+Each region has an assigned color, visible as a swatch in the region list and as the fill on the map. New regions take the next of eight pigments (woad, minium, verdigris, orpiment, folium, kermes, moss, ochre); the editor's **Color** picker offers seventeen named pigments or any custom colour.
 
 ### Labels and Descriptions
 All annotations have a **label** and a **description** field. Descriptions support Markdown (rendered in display mode).
@@ -80,7 +83,7 @@ The layer strip (top-left) lists layers bottom → top; higher layers draw above
 
 - Only the active layer is interactive. Other layers are dimmed and ignore clicks; switch layers by clicking a chip.
 - New annotations go on the active layer, and the brush/eraser only affect it.
-- In Design Mode: **+** adds a layer, double-click renames, drag reorders, and **×** (click twice) deletes a layer along with its contents.
+- In Design Mode: **+** adds a layer; double-click a chip (or press `F2` on it) to rename; drag a chip, press `Alt`+`←`/`→` on it, or use the arrows beside the layer's name in the right panel to reorder; **×** (click twice) deletes a layer along with its contents.
 - Move an item between layers with the **Layer** dropdown in its editor. Regions on different layers can't be merged.
 
 ### Nesting
