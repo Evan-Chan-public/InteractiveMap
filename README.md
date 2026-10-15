@@ -2,7 +2,7 @@
 
 A lightweight browser-based tool for annotating custom map images. Aims to produce a sort of... locationally nested filesystem.
 
-**Use it at [evan-chan-public.github.io/InteractiveMap](https://evan-chan-public.github.io/InteractiveMap/).** Nothing to install or sign up for: maps save in your browser as you work, and **Export** gives you a file to back one up or open it elsewhere. Leaflet, Marked and Lucide load from CDNs, so the first visit needs an internet connection.
+**Use it at [cairn-atlas.github.io](https://cairn-atlas.github.io/).** Nothing to install or sign up for: maps save in your browser as you work, and **Export** gives you a file to back one up or open it elsewhere. Leaflet, Marked and Lucide load from CDNs, so the first visit needs an internet connection.
 
 ---
 
@@ -175,7 +175,7 @@ Requires [Emscripten](https://emscripten.org/docs/getting_started/downloads.html
 
 ### Deploying
 
-Pushes to `main` deploy to GitHub Pages through `.github/workflows/pages.yml`, which builds the WASM module and publishes only what the browser needs (`index.html`, `style.css`, the scripts, `processor.wasm` and `maps/world.png`).
+Pushes to `main` of the [cairn-atlas/cairn-atlas.github.io](https://github.com/cairn-atlas/cairn-atlas.github.io) repository deploy to GitHub Pages through `.github/workflows/pages.yml` (in any other copy of the repo the job is skipped). It builds the WASM module and publishes only what the browser needs (`index.html`, `style.css`, the scripts, `processor.wasm` and `maps/world.png`).
 
 ### Code Layout
 
