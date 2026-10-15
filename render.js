@@ -8,6 +8,7 @@ import { clearSelection, selectAnnotation } from './selection.js';
 import { refreshLayerList, renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 import { enterVertexEdit, performMerge } from './shapes.js';
+import { scheduleLabelLayout } from './labels.js';
 
 export function applyZOrder() {
   // iterate bottom→top; bringToFront stacks each above the previous
@@ -78,26 +79,27 @@ export function applyInteractivity() {
   const ix = interactivity();
   state.annotations.regions.forEach(r => styleItem('region', r, ix));
   state.annotations.pins.forEach(p => styleItem('pin', p, ix));
+  scheduleLabelLayout(); // which names show depends on the active layer, drill-down and selection
 }
 
 // a pin is lettered onto the map like a place on an old map: an inked mark with its name beside it.
-// iconSize null lets the name set the width; the anchor is the mark's centre
+// The icon is the mark; the name hangs off it on whichever side labels.js finds free
 const pinIcon = (pin) => L.divIcon({
-  className:  'place-mark',
-  iconSize:   null,
+  className:  'place-mark label-right',
+  iconSize:   [14, 14],
   iconAnchor: [7, 7],
   html:       `${markSvg(pin.mark)}<span class="place-label">${escapeHtml(pin.label || 'Untitled')}</span>`,
 });
 
 export function mountPinLayer(pin, single = true) {
-  const marker = L.marker([pin.latlng.lat, pin.latlng.lng], { icon: pinIcon(pin) }).addTo(map);
+  const marker = L.marker([pin.latlng.lat, pin.latlng.lng], { icon: pinIcon(pin), riseOnHover: true }).addTo(map);
   marker.on('click', (e) => {
     if (!isLive(pin)) return;
     L.DomEvent.stopPropagation(e);
     selectAnnotation('pin', pin.id);
   });
   layers.pins[pin.id] = marker;
-  if (single) styleItem('pin', pin, interactivity());
+  if (single) { styleItem('pin', pin, interactivity()); scheduleLabelLayout(); }
 }
 
 // label or mark changed: the icon is rebuilt, so it's restyled too
@@ -106,6 +108,7 @@ export function updatePinLayer(pin) {
   if (!marker) return;
   marker.setIcon(pinIcon(pin));
   styleItem('pin', pin, interactivity());
+  scheduleLabelLayout();
 }
 
 export function mountRegionLayer(region, single = true) {

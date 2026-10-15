@@ -21,6 +21,7 @@ import { addPin, cancelRegionDraw, commitRegion, disarmDelete, draw, isDeleteArm
 import { cancelMerge, exitVertexEdit, hideBrushCursor, vertexEdit } from './shapes.js';
 import { initWorker, setWandStatus, triggerWand } from './wand.js';
 import { openDocument, openSaved } from './project.js';
+import { scheduleLabelLayout } from './labels.js';
 
 // DOM
 
@@ -127,6 +128,11 @@ map.on('click', (e) => {
   else if (state.ui.mergeSource)             cancelMerge();
   else                                        clearSelection();
 });
+
+// pin names are placed in screen space: re-letter after the view changes, and once the map
+// typeface has loaded (names change width)
+map.on('zoomend moveend resize', scheduleLabelLayout);
+document.fonts?.ready.then(scheduleLabelLayout);
 
 map.on('dblclick', (e) => {
   if (state.mode !== 'design') return;

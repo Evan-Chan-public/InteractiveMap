@@ -41,6 +41,7 @@ Pins are lettered onto the map like places on an old map: a small inked mark wit
 - Click a pin (its mark or its name) to select it and view/edit its label and description in the detail panel. The selected pin gets a gilt ring and underline.
 - **Mark** (editor): a dot, a ring or a cairn. It's saved with the pin.
 - Pins on faded layers show only their mark, so other layers don't crowd the map with names.
+- **Names don't collide.** Each name sits to the right of its mark, or to the left, above or below when that's taken or would run off screen; a name with no free spot is left off until you zoom in (hover its mark to read it). Names on lower layers are placed first, so zooming out keeps the broad places and thins the detail. The selected pin always shows its name. Long names wrap onto several lines.
 
 ### Regions
 - **Add Region** tool: click to place polygon vertices; click the first vertex again (or double-click) to close the shape. `Esc` cancels.
@@ -193,6 +194,7 @@ Plain ES modules, no build step. `app.js` is the entry point (mode, tools, map a
 | `nesting.js` | parent links, auto-nesting, tree lookups |
 | `map.js` | the Leaflet map |
 | `render.js` | drawing annotations, stacking order, what's clickable, faded or hidden |
+| `labels.js` | placing pin names so they don't collide, thinned by layer |
 | `selection.js` | selection and back/up navigation |
 | `panel.js` | the right panel: layer list, details, editor, tree |
 | `layerstrip.js` | the layer chips and moving items between layers |

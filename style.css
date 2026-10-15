@@ -446,19 +446,26 @@ body {
   pointer-events: none;
 }
 
-/* PLACE MARKS — pins lettered onto the map: an inked mark with the name beside it */
+/* PLACE MARKS — pins lettered onto the map: an inked mark with the name beside it.
+   The icon box is the 14px mark; the name hangs off whichever side labels.js finds free */
 .leaflet-marker-icon.place-mark {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
   color: var(--map-ink);
   background: none;
   border: none;
 }
 
+/* a finger-sized target around the small mark (a mouse doesn't need it, and on a dense map
+   it would cover neighbouring marks) */
+@media (pointer: coarse) {
+  .place-mark::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
+}
+
 .place-mark svg {
-  flex-shrink: 0;
+  display: block;
   overflow: visible;
   filter: drop-shadow(0 0 1px var(--map-halo)) drop-shadow(0 0 1px var(--map-halo));
 }
@@ -466,10 +473,15 @@ body {
 .mark-halo-fill   { fill: var(--map-halo); }
 .mark-halo-stroke { stroke: var(--map-halo); }
 
+/* long names wrap into balanced lines rather than running across the map */
 .place-label {
+  position: absolute;
+  width: max-content;
+  max-width: 12em;
+  text-wrap: balance;
   font-family: var(--map-label-font);
   font-size: 15px;
-  line-height: 1;
+  line-height: 1.05;
   letter-spacing: 0.01em;
   padding-bottom: 1px;
   text-shadow:
@@ -478,6 +490,16 @@ body {
     1px -1px 0 var(--map-halo), -1px 1px 0 var(--map-halo);
   transition: color 0.4s ease;
 }
+
+/* the gap matches GAP in labels.js */
+.label-right .place-label { left: calc(100% + 5px);   top: 50%;  transform: translateY(-50%); }
+.label-left  .place-label { right: calc(100% + 5px);  top: 50%;  transform: translateY(-50%); text-align: right; }
+.label-above .place-label { bottom: calc(100% + 5px); left: 50%; transform: translateX(-50%); text-align: center; }
+.label-below .place-label { top: calc(100% + 5px);    left: 50%; transform: translateX(-50%); text-align: center; }
+
+/* no free spot: the mark stays and its name shows on hover */
+.place-mark.label-culled .place-label { visibility: hidden; }
+.place-mark.label-culled:hover .place-label { visibility: visible; }
 
 .place-mark.leaflet-interactive:hover { color: var(--map-ink-hover); }
 
@@ -859,8 +881,8 @@ body {
 
 .mark-option.active {
   --map-halo: var(--btn-bg);
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  border-color: var(--map-gilt);
+  box-shadow: inset 0 0 0 1px var(--map-gilt);
 }
 
 .merge-target-title {
@@ -1083,7 +1105,6 @@ body {
 
 .tree-leaf { padding-left: 24px; }
 
-.tree-pin .tree-link::before { content: '📍'; font-size: 11px; }
 
 .tree-count {
   font-size: 11px;
