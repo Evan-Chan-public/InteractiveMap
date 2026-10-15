@@ -247,11 +247,15 @@ body {
   --focus: var(--gilt);
 }
 
+/* the app's mark at the head of the roll: a cairn of gilt stones, leather showing between them */
 .roll-mark {
-  font-family: var(--font-display);
-  font-size: 26px;
-  line-height: 44px;
-  color: var(--gilt);
+  width: 30px;
+  height: 34px;
+  margin: 4px 0 6px;
+  flex-shrink: 0;
+  fill: var(--gilt);
+  stroke: var(--leather);
+  stroke-width: 1.4;
 }
 
 .roll-pockets {

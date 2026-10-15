@@ -20,7 +20,14 @@
   <!-- Design tools: a roll of pockets; the chosen one folds out a flap with just its settings
        (hidden in display mode) -->
   <aside id="tools-panel" class="tool-roll hidden" aria-label="Tools">
-    <span class="roll-mark" aria-hidden="true">C</span>
+    <!-- the app's mark: a cairn, stones stacked in gilt -->
+    <svg class="roll-mark" viewBox="0 0 28 32" aria-hidden="true">
+      <path d="M2.5 27c-.3-3 2.4-5.2 6.4-5.4 3.8-.2 6.4 1.6 6.6 4.4.2 2.9-2.3 4.3-6.4 4.3-4 0-6.4-1-6.6-3.3Z"/>
+      <path d="M13.6 26.6c.2-2.8 3-4.3 6.6-4.1 3.5.2 5.6 1.9 5.4 4.5-.2 2.4-2.6 3.4-6.2 3.3-3.7-.1-6-1.3-5.8-3.7Z"/>
+      <path d="M6.3 19.4c.2-2.6 3.3-4.3 7.6-4.3 4.4 0 7.4 1.6 7.2 4.3-.2 2.4-3.3 3.6-7.5 3.5-4.4-.1-7.5-1.2-7.3-3.5Z"/>
+      <path d="M9.4 12.6c.3-2.2 2.4-3.6 5-3.5 2.8.1 4.4 1.5 4.1 3.6-.3 1.9-2.3 2.9-4.7 2.8-2.7-.1-4.7-1-4.4-2.9Z"/>
+      <path d="M11.8 6.9c.1-1.8 1.4-3 3.1-2.9 1.8.1 2.7 1.3 2.5 2.9-.2 1.5-1.5 2.4-3 2.3-1.6-.1-2.7-.9-2.6-2.3Z"/>
+    </svg>
 
     <div class="roll-pockets" role="group" aria-label="Drawing tools">
       <button id="tool-pin" class="pocket" aria-pressed="false" aria-keyshortcuts="P" aria-label="Add Pin" data-tip="Add Pin" data-key="P">
