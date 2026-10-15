@@ -1,7 +1,7 @@
 // PANEL — the right panel: layer list, details view, editor, nesting tree, merge preview
 
 import { navStack, state } from './state.js';
-import { escapeHtml, ICON_EYE, ICON_EYE_OFF } from './utils.js';
+import { DEFAULT_MARK, escapeHtml, ICON_EYE, ICON_EYE_OFF, markSvg, PIN_MARKS } from './utils.js';
 import { scheduleSave } from './persistence.js';
 import { ancestorsOf, autoParent, childrenInView, countInView, findAnnotation, findItem,
          parentInView, renest, renestAll, visibleInMode, wouldCycle } from './nesting.js';
@@ -44,6 +44,22 @@ function renderSwatchGrid(currentColor) {
     </div>
     <input id="edit-color-custom" type="color" value="${escapeHtml(currentColor || '#4a9eff')}" style="display:none" />
   `;
+}
+
+function bindMarkPicker(pin) {
+  const picker = document.getElementById('mark-picker');
+  picker.addEventListener('click', (e) => {
+    const option = e.target.closest('[data-mark]');
+    if (!option || option.dataset.mark === pin.mark) return;
+    pushHistory();
+    pin.mark = option.dataset.mark;
+    picker.querySelectorAll('.mark-option').forEach(o => {
+      o.classList.toggle('active', o === option);
+      o.setAttribute('aria-checked', o === option);
+    });
+    updatePinLayer(pin);
+    scheduleSave();
+  });
 }
 
 function bindSwatchGrid(annotation) {
@@ -138,7 +154,7 @@ function renderLayerList() {
 
   const row = (type, a) => `
     <div class="pin-list-item item-row${a.hidden ? ' item-hidden' : ''}${hiddenInView(a) ? ' view-hidden' : ''}" data-type="${type}" data-id="${escapeHtml(a.id)}">
-      ${type === 'region' ? `<span class="color-wheel" style="background:${escapeHtml(a.color || '#4a9eff')}"></span>` : ''}
+      ${type === 'region' ? `<span class="color-wheel" style="background:${escapeHtml(a.color || '#4a9eff')}"></span>` : `<span class="row-mark">${markSvg(a.mark, 12)}</span>`}
       <span class="item-row-label">${escapeHtml(a.label || (type === 'region' ? 'Untitled region' : 'Untitled pin'))}</span>
       ${a.parentId ? `<span class="item-row-parent">in ${escapeHtml(findItem(a.parentId)?.label || 'Untitled')}</span>` : ''}
       <button class="row-eye" title="${hiddenInView(a) ? 'Show' : 'Hide while editing (not saved; viewers still see it)'}">${hiddenInView(a) ? ICON_EYE_OFF : ICON_EYE}</button>
@@ -246,6 +262,15 @@ function renderDetailEditor(annotation, type) {
       ${renderSwatchGrid(annotation.color)}
     </details>` : '';
 
+  const mark       = annotation.mark ?? DEFAULT_MARK;
+  const markPicker = isRegion ? '' : `
+    <span class="field-label">Mark</span>
+    <div id="mark-picker" class="mark-picker" role="radiogroup" aria-label="Mark">
+      ${Object.entries(PIN_MARKS).map(([key, m]) => `
+        <button class="mark-option${mark === key ? ' active' : ''}" data-mark="${key}"
+                role="radio" aria-checked="${mark === key}" title="${m.title}">${markSvg(key, 16)}</button>`).join('')}
+    </div>`;
+
   const mergeBanner = (isRegion && state.ui.mergeSource === annotation.id)
     ? `<div class="merge-banner">
          Click another region to merge into this one.
@@ -308,6 +333,7 @@ function renderDetailEditor(annotation, type) {
       ${layerSelect}
       ${parentSelect}
       ${colorSwatch}
+      ${markPicker}
       ${polyHint}
 
       <label class="field-label" for="edit-body">Description <span class="field-hint">(Markdown)</span></label>
@@ -368,6 +394,7 @@ function renderDetailEditor(annotation, type) {
   });
 
   if (isRegion) bindSwatchGrid(annotation);
+  else bindMarkPicker(annotation);
 
   document.getElementById('edit-delete').addEventListener('click', () => {
     requestDelete(type, annotation.id);
@@ -407,7 +434,8 @@ export function showDeleteArmed(on) {
 
 function treeLinkHtml(type, item) {
   const dot = type === 'region'
-    ? `<span class="color-wheel" style="background:${escapeHtml(item.color || '#4a9eff')}"></span>` : '';
+    ? `<span class="color-wheel" style="background:${escapeHtml(item.color || '#4a9eff')}"></span>`
+    : `<span class="row-mark">${markSvg(item.mark, 12)}</span>`;
   const fallback = type === 'region' ? 'Untitled region' : 'Untitled pin';
   return `<span class="tree-link" data-type="${type}" data-id="${escapeHtml(item.id)}">${dot}${escapeHtml(item.label || fallback)}</span>`;
 }

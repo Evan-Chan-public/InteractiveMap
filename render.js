@@ -1,7 +1,7 @@
 // RENDER — annotations on the map: mounting leaflet layers, stacking order, visibility, interactivity
 
 import { layers, state } from './state.js';
-import { escapeHtml } from './utils.js';
+import { escapeHtml, markSvg } from './utils.js';
 import { childrenInView, countInView, findAnnotation, parentInView } from './nesting.js';
 import { map } from './map.js';
 import { clearSelection, selectAnnotation } from './selection.js';
@@ -64,11 +64,13 @@ function itemElements(type, id) {
 }
 
 function styleItem(type, item, ix) {
-  const frame = ix.focus?.id === item.id;
-  const dim   = !frame && !ix.isLive(item);
+  const frame    = ix.focus?.id === item.id;
+  const dim      = !frame && !ix.isLive(item);
+  const selected = state.ui.selected?.id === item.id;
   for (const el of itemElements(type, item.id)) {
     el?.classList.toggle('layer-dim', dim);
     el?.classList.toggle('drill-frame', frame);
+    el?.classList.toggle('is-selected', selected);
   }
 }
 
@@ -78,9 +80,17 @@ export function applyInteractivity() {
   state.annotations.pins.forEach(p => styleItem('pin', p, ix));
 }
 
+// a pin is lettered onto the map like a place on an old map: an inked mark with its name beside it.
+// iconSize null lets the name set the width; the anchor is the mark's centre
+const pinIcon = (pin) => L.divIcon({
+  className:  'place-mark',
+  iconSize:   null,
+  iconAnchor: [7, 7],
+  html:       `${markSvg(pin.mark)}<span class="place-label">${escapeHtml(pin.label || 'Untitled')}</span>`,
+});
+
 export function mountPinLayer(pin, single = true) {
-  const marker = L.marker([pin.latlng.lat, pin.latlng.lng]).addTo(map);
-  marker.bindTooltip(escapeHtml(pin.label || 'Pin'), { direction: 'top', offset: [0, -28] });
+  const marker = L.marker([pin.latlng.lat, pin.latlng.lng], { icon: pinIcon(pin) }).addTo(map);
   marker.on('click', (e) => {
     if (!isLive(pin)) return;
     L.DomEvent.stopPropagation(e);
@@ -90,10 +100,12 @@ export function mountPinLayer(pin, single = true) {
   if (single) styleItem('pin', pin, interactivity());
 }
 
+// label or mark changed: the icon is rebuilt, so it's restyled too
 export function updatePinLayer(pin) {
   const marker = layers.pins[pin.id];
   if (!marker) return;
-  marker.setTooltipContent(escapeHtml(pin.label || 'Pin'));
+  marker.setIcon(pinIcon(pin));
+  styleItem('pin', pin, interactivity());
 }
 
 export function mountRegionLayer(region, single = true) {

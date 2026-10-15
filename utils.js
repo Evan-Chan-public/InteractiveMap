@@ -50,6 +50,18 @@ const svg = (body) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="non
 export const ICON_EYE     = svg('<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>');
 export const ICON_EYE_OFF = svg('<path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/>');
 
+// PIN MARKS — the inked symbol beside a pin's name, as on an old map. Drawn in currentColor;
+// the ring's hollow and the gaps between the cairn's stones take the halo colour (.mark-halo in CSS)
+export const PIN_MARKS = {
+  dot:   { title: 'Dot',   body: '<circle cx="7" cy="7" r="3.6" fill="currentColor"/>' },
+  ring:  { title: 'Ring',  body: '<circle class="mark-halo-fill" cx="7" cy="7" r="3.8" stroke="currentColor" stroke-width="1.7"/>' },
+  cairn: { title: 'Cairn', body: '<g class="mark-halo-stroke" fill="currentColor" stroke-width="0.7"><ellipse cx="7" cy="11.2" rx="5.4" ry="2.1"/><ellipse cx="7.3" cy="8" rx="4" ry="1.8"/><ellipse cx="6.8" cy="5.1" rx="2.8" ry="1.5"/><ellipse cx="7.1" cy="2.6" rx="1.6" ry="1.2"/></g>' },
+};
+export const DEFAULT_MARK = 'dot';
+
+export const markSvg = (mark, size = 14) =>
+  `<svg viewBox="0 0 14 14" width="${size}" height="${size}" aria-hidden="true">${(PIN_MARKS[mark] ?? PIN_MARKS[DEFAULT_MARK]).body}</svg>`;
+
 // ring [{lat,lng}] → polygon-clipping Polygon [[[x,y],...]]
 export const ringToGeom = (ring) => [ring.map(p => [p.lng, p.lat])];
 

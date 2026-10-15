@@ -35,8 +35,12 @@ Uploading still replaces it for the session.
 The flood fill works within a 1024×1024 window around the click, so the largest countries (Russia, Canada) fill only partly in one click. Fill the rest with a second click and **Merge**, or the brush.
 
 ### Pins
+Pins are lettered onto the map like places on an old map: a small inked mark with the name beside it.
+
 - **Add Pin** tool: click anywhere on the map (including on top of regions) to place a pin.
-- Click a pin to select it and view/edit its label and description in the detail panel.
+- Click a pin (its mark or its name) to select it and view/edit its label and description in the detail panel. The selected pin gets a gilt ring and underline.
+- **Mark** (editor): a dot, a ring or a cairn. It's saved with the pin.
+- Pins on faded layers show only their mark, so other layers don't crowd the map with names.
 
 ### Regions
 - **Add Region** tool: click to place polygon vertices; click the first vertex again (or double-click) to close the shape. `Esc` cancels.

@@ -5,7 +5,7 @@
 // localStorage as before. Older versions saved annotations to localStorage: moved over on first load.
 
 import { state } from './state.js';
-import { generateId } from './utils.js';
+import { DEFAULT_MARK, generateId, PIN_MARKS } from './utils.js';
 import { imageRecord } from './image.js';
 import { FORMAT, VERSION } from './project.js';
 
@@ -247,6 +247,6 @@ export function sanitizeAnnotations(data) {
     pins: list(data?.pins)
       .map(p => ({ p, latlng: toPoint(p.latlng) }))
       .filter(({ latlng }) => latlng)
-      .map(({ p, latlng }) => nesting(p, { ...base(p), latlng })),
+      .map(({ p, latlng }) => nesting(p, { ...base(p), latlng, mark: Object.hasOwn(PIN_MARKS, p.mark) ? p.mark : DEFAULT_MARK })),
   };
 }

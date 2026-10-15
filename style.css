@@ -17,6 +17,13 @@
   --btn-bg: #2e2e2e;
   --btn-hover: #3a3a3a;
   --btn-active: #4a9eff;
+
+  /* lettering on the map itself: iron-gall ink with a vellum halo, so names read on any image */
+  --map-ink:        #2a1c12;
+  --map-ink-hover:  #7a2617;
+  --map-halo:       #f3ead6;
+  --map-gilt:       #b0832a;
+  --map-label-font: 'IM Fell English', 'Iowan Old Style', Georgia, serif;
 }
 
 html, body {
@@ -439,6 +446,59 @@ body {
   pointer-events: none;
 }
 
+/* PLACE MARKS — pins lettered onto the map: an inked mark with the name beside it */
+.leaflet-marker-icon.place-mark {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  color: var(--map-ink);
+  background: none;
+  border: none;
+}
+
+.place-mark svg {
+  flex-shrink: 0;
+  overflow: visible;
+  filter: drop-shadow(0 0 1px var(--map-halo)) drop-shadow(0 0 1px var(--map-halo));
+}
+
+.mark-halo-fill   { fill: var(--map-halo); }
+.mark-halo-stroke { stroke: var(--map-halo); }
+
+.place-label {
+  font-family: var(--map-label-font);
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  padding-bottom: 1px;
+  text-shadow:
+    0 0 2px var(--map-halo), 0 0 2px var(--map-halo),
+    1px 1px 0 var(--map-halo), -1px -1px 0 var(--map-halo),
+    1px -1px 0 var(--map-halo), -1px 1px 0 var(--map-halo);
+  transition: color 0.4s ease;
+}
+
+.place-mark.leaflet-interactive:hover { color: var(--map-ink-hover); }
+
+/* selected: a gilt ring about the mark and a gilt rule under the name */
+.place-mark.is-selected svg {
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--map-halo), 0 0 0 4.5px var(--map-gilt);
+}
+
+.place-mark.is-selected .place-label {
+  text-decoration: underline 1.5px var(--map-gilt);
+  text-underline-offset: 3px;
+}
+
+/* faded places keep their mark but drop the name, so other layers don't crowd the map */
+.place-mark.layer-dim .place-label { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .place-label { transition: none; }
+}
+
 /* display mode: the region you drilled into frames its children (outlined, not clickable) */
 .leaflet-pane > svg path.leaflet-interactive.drill-frame {
   pointer-events: none;
@@ -768,6 +828,39 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.25);
   vertical-align: middle;
   flex-shrink: 0;
+}
+
+/* pin marks in the panel: the same symbols, in panel colours */
+.row-mark,
+.mark-option {
+  --map-halo: var(--panel-bg);
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text);
+}
+
+.mark-picker {
+  display: flex;
+  gap: 6px;
+}
+
+.mark-option {
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  background: var(--btn-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.mark-option:hover { background: var(--btn-hover); }
+
+.mark-option.active {
+  --map-halo: var(--btn-bg);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .merge-target-title {

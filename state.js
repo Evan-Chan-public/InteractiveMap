@@ -10,7 +10,7 @@ export const state = {
   annotations: {
     layers:  [],         // [{ id, name }] — array order = z-order; bottom = root, top = leaf
     regions: [],         // [{ id, polygons, color, label, body, hidden, layerId }]
-    pins:    [],         // [{ id, latlng, label, body, hidden, layerId }]
+    pins:    [],         // [{ id, latlng, label, body, hidden, layerId, mark }]  mark: a PIN_MARKS key
   },
   ui: {
     activeTool:    null, // 'region' | 'pin' | 'wand' | 'brush' | 'eraser' | 'edit' | null

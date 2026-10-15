@@ -1,7 +1,7 @@
 // CREATE — new pins and regions (drawn by hand), colours, and deletion
 
 import { layers, state } from './state.js';
-import { generateId } from './utils.js';
+import { DEFAULT_MARK, generateId } from './utils.js';
 import { scheduleSave } from './persistence.js';
 import { orphanChildrenOf, renestAround } from './nesting.js';
 import { map } from './map.js';
@@ -21,6 +21,7 @@ export function addPin(latlng) {
     body:    '',
     hidden:  false,
     layerId: state.ui.activeLayerId,
+    mark:    DEFAULT_MARK,
   };
   state.annotations.pins.push(pin);
   renestAround(pin);
