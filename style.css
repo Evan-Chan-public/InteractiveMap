@@ -62,7 +62,7 @@
   --map-ink-hover:  #7a2617;
   --map-halo:       #f3ead6;
   --map-gilt:       #b0832a;
-  --map-label-font: 'IM Fell English', 'Iowan Old Style', Georgia, serif;
+  --map-label-font: 'EB Garamond', 'Iowan Old Style', Georgia, serif;
 
   --ease-ink: cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -669,6 +669,7 @@ body {
   box-shadow: 0 1px 1px oklch(0.3 0.04 50 / 0.15), 0 2px 6px oklch(0.3 0.04 50 / 0.2);
   font-family: var(--map-label-font);
   font-size: 16px;
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 
@@ -721,10 +722,11 @@ body {
   white-space: nowrap;
   font-family: var(--map-label-font);
   font-size: 16px;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  padding-left: 0.22em; /* balance the tracking after the last letter */
+  padding-left: 0.18em; /* balance the tracking after the last letter */
   color: var(--map-ink);
   opacity: 0.72;
   text-shadow: 0 0 2px var(--map-halo), 0 0 2px var(--map-halo), 0 0 4px var(--map-halo);
@@ -791,7 +793,8 @@ body {
   max-width: 12em;
   text-wrap: balance;
   font-family: var(--map-label-font);
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 500;
   line-height: 1.05;
   letter-spacing: 0.01em;
   padding-bottom: 1px;
@@ -912,7 +915,7 @@ body {
   text-underline-offset: 2px;
 }
 
-/* a place's name, set in an insular hand above a plaited rule */
+/* a place's name, set in a scribe's small capitals above a plaited rule */
 .detail-title {
   font-size: 18px;
   font-weight: 700;
@@ -920,11 +923,11 @@ body {
 }
 
 #detail-content .detail-view .detail-title {
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 28px;
+  font-family: var(--font-label);
+  font-weight: 500;
+  font-size: 27px;
   line-height: 1.15;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   text-wrap: balance;
   margin: 2px 0 10px;
 }
