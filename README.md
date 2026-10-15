@@ -13,7 +13,7 @@ The default view. Regions and pins are visible and selectable; clicking them ope
 
 From the keyboard, `Tab` reaches the regions and pins you can use; a dashed oxblood line shows which has focus, a focused region shows its name, and `Enter` or `Space` opens it.
 
-Clicking a region drills into it: the region stays outlined, its children become clickable (whichever layer they're on), and everything else fades. Selecting something with no children keeps its siblings clickable. `Esc` or the back button (named after the parent) goes up a level; at the top level it returns to browsing the active layer. Clicking the map outside the area you're in (or outside the selected item) deselects and returns to the outermost layer; clicks inside it that miss a child do nothing. Clicking a layer chip leaves the drill-down and browses that layer. Hidden regions are skipped, so their children appear under the next visible ancestor.
+Clicking a region drills into it: the region keeps its painted border, its children become clickable (whichever layer they're on), and everything outside it is veiled. Selecting something with no children keeps its siblings clickable. `Esc` or the back button (named after the parent) goes up a level; at the top level it returns to browsing the active layer. Clicking the map outside the area you're in (or outside the selected item) deselects and returns to the outermost layer; clicks inside it that miss a child do nothing. Clicking a layer chip leaves the drill-down and browses that layer. Hidden regions are skipped, so their children appear under the next visible ancestor.
 
 ### Design Mode
 The tools sit in the left panel. On a phone they're a drawer: open it with **Tools** (top right); picking a tool, tapping the map behind it or `Esc` closes it.
@@ -60,7 +60,7 @@ With a region selected in the detail panel:
 - **Consolidate**: collapses a multi-ring region (e.g. two disconnected blobs) into a single contiguous polygon by bridging near-touching rings.
 
 ### Color
-Each region has an assigned color, visible as a swatch in the region list and as the fill on the map. New regions take the next of eight pigments (woad, minium, verdigris, orpiment, folium, kermes, moss, ochre); the editor's **Color** picker offers seventeen named pigments or any custom colour.
+Each region has an assigned color, visible as a swatch in the region list and on the map, where it's painted like a hand-coloured old map: a band of colour along the inside of the border, a thin inked edge and a faint wash inside. Region names are lettered across the regions you can use, in spaced capitals; a name that doesn't fit (or would cover a pin) is left off, and hovering the region shows it instead. Pins on faded layers show their name when the mouse rests on them. New regions take the next of eight pigments (woad, minium, verdigris, orpiment, folium, kermes, moss, ochre); the editor's **Color** picker offers seventeen named pigments or any custom colour.
 
 ### Labels and Descriptions
 All annotations have a **label** and a **description** field. Descriptions support Markdown (rendered in display mode).
