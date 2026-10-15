@@ -677,8 +677,67 @@ body {
 .leaflet-tooltip-left::before   { border-left-color: var(--map-halo); }
 .leaflet-tooltip-right::before  { border-right-color: var(--map-halo); }
 
+/* REGIONS — tinted as an old-map colourist would: a thin inked edge, a faint wash inside, and a
+   band of pigment painted along the inside of the boundary (render.js clips it to the shape).
+   Each path carries its colour as --pigment */
+.leaflet-pane > svg path.region-outline {
+  stroke: color-mix(in oklch, var(--pigment) 70%, var(--map-ink));
+  stroke-width: 1.1;
+  stroke-opacity: 0.9;
+  fill: var(--pigment);
+  fill-opacity: 0.07;
+  transition: fill-opacity 0.25s ease;
+}
+
+.leaflet-pane > svg path.region-wash {
+  stroke: var(--pigment);
+  stroke-width: 12;
+  stroke-opacity: 0.42;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+@media (hover: hover) {
+  .leaflet-pane > svg path.region-outline.leaflet-interactive:hover { fill-opacity: 0.15; }
+}
+
+/* the chosen region: its band at full strength and a firmer edge */
+.leaflet-pane > svg path.region-outline.is-selected { fill-opacity: 0.13; stroke-width: 1.8; stroke-opacity: 1; }
+.leaflet-pane > svg path.region-wash.is-selected    { stroke-opacity: 0.7; }
+
+/* display mode: the region you drilled into frames its children; its band stays, its wash clears,
+   and everything outside it is veiled (render.js) */
+.leaflet-pane > svg path.region-outline.drill-frame { fill-opacity: 0; pointer-events: none; }
+.leaflet-pane > svg path.region-wash.drill-frame    { stroke-opacity: 0.7; }
+.leaflet-pane > svg path.drill-veil { fill: var(--ground); fill-opacity: 0.6; animation: ink-fade 0.4s ease; }
+
+/* a region's name, lettered across it in spaced capitals */
+.region-name { position: absolute; left: 0; top: 0; pointer-events: none; }
+.region-name span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  font-family: var(--map-label-font);
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding-left: 0.22em; /* balance the tracking after the last letter */
+  color: var(--map-ink);
+  opacity: 0.72;
+  text-shadow: 0 0 2px var(--map-halo), 0 0 2px var(--map-halo), 0 0 4px var(--map-halo);
+  transition: opacity 0.3s ease;
+}
+.region-name.is-selected span { opacity: 0.95; }
+.region-name.region-name-culled span { visibility: hidden; }
+
+/* the hover slip is only for regions whose name isn't lettered */
+.leaflet-tooltip.is-redundant { display: none; }
+
 /* Dimmed annotations for non-active layers (regions + pins) */
-.leaflet-overlay-pane svg .layer-dim,
+.leaflet-pane svg .layer-dim,
 .leaflet-marker-icon.layer-dim {
   opacity: 0.25;
 }
@@ -780,15 +839,12 @@ body {
   text-underline-offset: 3px;
 }
 
-/* faded places keep their mark but drop the name, so other layers don't crowd the map */
+/* faded places keep their mark but drop the name, so other layers don't crowd the map. Clicks
+   pass through them; a mouse resting on one still names it (render.js marks it is-peeked) */
 .place-mark.layer-dim .place-label { display: none; }
+.place-mark.layer-dim.is-peeked { opacity: 0.9; z-index: 1000 !important; }
+.place-mark.layer-dim.is-peeked .place-label { display: block; visibility: visible; }
 
-/* display mode: the region you drilled into frames its children (outlined, not clickable) */
-.leaflet-pane > svg path.leaflet-interactive.drill-frame {
-  pointer-events: none;
-  stroke-width: 3;
-  fill-opacity: 0.06;
-}
 
 /* MAP PLACEHOLDER */
 
@@ -1648,7 +1704,7 @@ select.field-input {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .place-label { transition: none; }
+  .place-label, .region-name span, .leaflet-pane > svg path.region-outline { transition: none; }
   #layer-strip, #mode-toggle > div, .leaflet-control-zoom { animation: ink-fade 0.3s ease both; animation-delay: 0s; }
   .panel-right:not(.hidden) { animation: ink-fade 0.2s ease; }
   .panel-left { transition: visibility 0s; }

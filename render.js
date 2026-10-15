@@ -8,7 +8,7 @@ import { clearSelection, selectAnnotation } from './selection.js';
 import { refreshLayerList, renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 import { enterVertexEdit, performMerge } from './shapes.js';
-import { scheduleLabelLayout } from './labels.js';
+import { regionNameShown, scheduleLabelLayout } from './labels.js';
 
 export function applyZOrder() {
   // iterate bottom→top; bringToFront stacks each above the previous
@@ -57,18 +57,22 @@ function isLive(item) {
   return interactivity().isLive(item);
 }
 
+// a region's outlines, one per ring (its bands of pigment are separate: washElements)
 function itemElements(type, id) {
   if (type === 'pin') return [layers.pins[id]?.getElement()];
-  const els = [];
-  layers.regions[id]?.eachLayer(l => els.push(l.getElement()));
-  return els;
+  return (layers.regions[id]?.rings ?? []).map(r => r.outline.getElement());
+}
+
+function washElements(id) {
+  return (layers.regions[id]?.rings ?? []).map(r => r.wash.getElement());
 }
 
 function styleItem(type, item, ix) {
   const frame    = ix.focus?.id === item.id;
   const dim      = !frame && !ix.isLive(item);
   const selected = state.ui.selected?.id === item.id;
-  for (const el of itemElements(type, item.id)) {
+  const els      = type === 'pin' ? itemElements(type, item.id) : [...itemElements(type, item.id), ...washElements(item.id)];
+  for (const el of els) {
     el?.classList.toggle('layer-dim', dim);
     el?.classList.toggle('drill-frame', frame);
     el?.classList.toggle('is-selected', selected);
@@ -121,6 +125,25 @@ function regionAtElement(el) {
 }
 
 // Enter / Space on a focused pin or region does what a click does
+// faded marks let clicks through to what's beneath, so hovering is found by position: the mark
+// under a resting mouse pointer is named (one at a time)
+let peeked = null;
+export function peekFadedMark(x, y) {
+  let hit = null;
+  if (x !== null) {
+    for (const pin of state.annotations.pins) {
+      const el = layers.pins[pin.id]?.getElement();
+      if (!el?.classList.contains('layer-dim')) continue;
+      const r = el.getBoundingClientRect();
+      if (x >= r.left - 3 && x <= r.right + 3 && y >= r.top - 3 && y <= r.bottom + 3) { hit = el; break; }
+    }
+  }
+  if (hit === peeked) return;
+  peeked?.classList.remove('is-peeked');
+  hit?.classList.add('is-peeked');
+  peeked = hit;
+}
+
 export function activateMapElement(el) {
   const pin = pinAtElement(el);
   if (pin) return activatePin(pin);
@@ -132,7 +155,7 @@ export function activateMapElement(el) {
 export function regionFocusChanged(el, focused) {
   const region = regionAtElement(el);
   if (!region) return null;
-  layers.regions[region.id]?.eachLayer(poly => {
+  layers.regions[region.id]?.rings.forEach(({ outline: poly }) => {
     if (poly.getElement() !== el) return;
     if (!focused) { poly.closeTooltip(); return; }
     const center = poly.getBounds().getCenter();
@@ -160,7 +183,22 @@ export function applyInteractivity() {
   const ix = interactivity();
   state.annotations.regions.forEach(r => styleItem('region', r, ix));
   state.annotations.pins.forEach(p => styleItem('pin', p, ix));
+  updateVeil(ix.focus);
   scheduleLabelLayout(); // which names show depends on the active layer, drill-down and selection
+}
+
+// DRILL VEIL — drilled into a region, everything outside it is veiled in the ground colour, so the
+// place you're in stands clear. One polygon: the whole plane with the region's rings cut out
+let veil = null;
+
+function updateVeil(focus) {
+  const group = focus && layers.regions[focus.id];
+  if (!group || !map.hasLayer(group)) { veil?.remove(); veil = null; return; }
+  const far   = 1e6;
+  const plane = [[-far, -far], [-far, far], [far, far], [far, -far]];
+  const rings = [plane, ...focus.polygons.map(ring => ring.map(p => [p.lat, p.lng]))];
+  if (veil) veil.setLatLngs(rings);
+  else veil = L.polygon(rings, { pane: 'drillVeil', interactive: false, stroke: false, className: 'drill-veil' }).addTo(map);
 }
 
 // a pin is lettered onto the map like a place on an old map: an inked mark with its name beside it.
@@ -190,18 +228,63 @@ export function updatePinLayer(pin) {
   scheduleLabelLayout();
 }
 
+// A region is drawn as an old-map colourist tinted one: a thin inked edge and a faint wash inside
+// (the outline, which takes the clicks), and a band of pigment painted along the inside of the
+// boundary (a wide stroke in its own pane, clipped to the outline's shape so it never spills over
+// a neighbour). Colours come from CSS through --pigment, so states are styled there
+const SVG_NS = 'http://www.w3.org/2000/svg';
+let ringSeq = 0;
+
+function paintRing(outline, wash) {
+  const id = `region-ring-${++ringSeq}`;
+  outline.on('add', () => {
+    const el = outline.getElement();
+    el.id = id;
+    el.classList.add('region-outline');
+    el.style.setProperty('--pigment', outline.options.fillColor);
+  });
+  wash.on('add', () => {
+    const el  = wash.getElement();
+    const svg = el.ownerSVGElement;
+    let clip  = svg.querySelector(`#${id}-clip`);
+    if (!clip) {
+      const defs = svg.querySelector('defs') ?? svg.insertBefore(document.createElementNS(SVG_NS, 'defs'), svg.firstChild);
+      clip = document.createElementNS(SVG_NS, 'clipPath');
+      clip.id = `${id}-clip`;
+      const use = document.createElementNS(SVG_NS, 'use');
+      use.setAttribute('href', `#${id}`);
+      clip.appendChild(use);
+      defs.appendChild(clip);
+    }
+    el.setAttribute('clip-path', `url(#${id}-clip)`);
+    el.classList.add('region-wash');
+    el.style.setProperty('--pigment', wash.options.color);
+  });
+  return id;
+}
+
+function ringLayers(ring, color) {
+  const latlngs = ring.map(p => [p.lat, p.lng]);
+  const outline = L.polygon(latlngs, { color, weight: 1, fillColor: color, fillOpacity: 0.07 });
+  const wash    = L.polygon(latlngs, { pane: 'regionWash', color, weight: 12, opacity: 0.5, fill: false, interactive: false });
+  const id      = paintRing(outline, wash);
+  return { outline, wash, id };
+}
+
 export function mountRegionLayer(region, single = true) {
   const group = L.featureGroup().addTo(map);
+  group.rings = [];
 
   for (const ring of region.polygons) {
-    const poly = L.polygon(ring.map(p => [p.lat, p.lng]), {
-      color:       region.color,
-      weight:      1.5,
-      fillColor:   region.color,
-      fillOpacity: 0.18,
+    const r = ringLayers(ring, region.color);
+    r.outline.bindTooltip(escapeHtml(region.label || 'Region'), { sticky: true, className: 'region-tip' });
+    r.outline.on('tooltipopen', (e) => {
+      // a region whose name is lettered on the map needs no slip
+      e.tooltip.getElement()?.classList.toggle('is-redundant', regionNameShown(region.id));
     });
-    poly.bindTooltip(escapeHtml(region.label || 'Region'), { sticky: true });
-    group.addLayer(poly);
+    group.addLayer(r.wash);
+    group.addLayer(r.outline);
+    group.rings.push(r);
   }
 
   group.on('click', (e) => {
@@ -236,25 +319,36 @@ export function mountAll() {
   applyZOrder();
 }
 
+// the band's clip lives in the wash pane's <defs>; it goes with its region
+function dropClips(group) {
+  group?.rings?.forEach(r => document.getElementById(`${r.id}-clip`)?.remove());
+}
+
 export function unmountAll() {
   Object.values(layers.pins).forEach(m => m.remove());
-  Object.values(layers.regions).forEach(g => g.remove());
+  Object.values(layers.regions).forEach(g => { g.remove(); dropClips(g); });
   layers.pins    = {};
   layers.regions = {};
 }
 
 export function unmountRegion(id) {
+  dropClips(layers.regions[id]);
   layers.regions[id]?.remove();
   delete layers.regions[id];
+  scheduleLabelLayout(); // its name goes with it
 }
 
 export function updateRegionLayer(region) {
   const group = layers.regions[region.id];
   if (!group) return;
-  group.eachLayer(poly => {
-    poly.setTooltipContent(escapeHtml(region.label || 'Region'));
-    poly.setStyle({ color: region.color, fillColor: region.color });
-  });
+  for (const { outline, wash } of group.rings) {
+    outline.setTooltipContent(escapeHtml(region.label || 'Region'));
+    outline.setStyle({ color: region.color, fillColor: region.color });
+    wash.setStyle({ color: region.color });
+    outline.getElement()?.style.setProperty('--pigment', region.color);
+    wash.getElement()?.style.setProperty('--pigment', region.color);
+  }
+  scheduleLabelLayout(); // the name may have changed
 }
 
 export function remountRegionLayer(region) {

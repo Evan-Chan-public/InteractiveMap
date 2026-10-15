@@ -13,7 +13,7 @@ import { fetchLinkedFile, linkedFile, readShareHash, showBanner } from './share.
 import { map } from './map.js';
 import { redo, undo } from './history.js';
 import { clearSelection, goUp, showLayer } from './selection.js';
-import { activateMapElement, applyLayerVisibility, drillFocus, regionFocusChanged } from './render.js';
+import { activateMapElement, applyLayerVisibility, drillFocus, peekFadedMark, regionFocusChanged } from './render.js';
 import { renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 import { addPin, cancelRegionDraw, commitRegion, disarmDelete, draw, isDeleteArmed, requestDelete,
@@ -21,7 +21,7 @@ import { addPin, cancelRegionDraw, commitRegion, disarmDelete, draw, isDeleteArm
 import { cancelMerge, exitVertexEdit, hideBrushCursor, vertexEdit } from './shapes.js';
 import { initWorker, setWandStatus, triggerWand } from './wand.js';
 import { openDocument, openSaved } from './project.js';
-import { scheduleLabelLayout } from './labels.js';
+import { lettersLoaded, scheduleLabelLayout } from './labels.js';
 
 // DOM
 
@@ -166,7 +166,7 @@ map.on('click', (e) => {
 // pin names are placed in screen space: re-letter after the view changes, and once the map
 // typeface has loaded (names change width)
 map.on('zoomend moveend resize', scheduleLabelLayout);
-document.fonts?.ready.then(scheduleLabelLayout);
+document.fonts?.ready.then(lettersLoaded);
 
 // pins and regions are buttons: Enter or Space selects the focused one (Leaflet only makes them focusable)
 map.getContainer().addEventListener('keydown', (e) => {
@@ -181,6 +181,14 @@ map.getContainer().addEventListener('focusin', (e) => {
   map.getContainer().scrollLeft = 0;
 });
 map.getContainer().addEventListener('focusout', (e) => regionFocusChanged(e.target, false));
+
+// a mouse resting on a faded mark names it (once per frame, mice only: a tap would leave it stuck)
+let peekFrame = 0;
+map.getContainer().addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'mouse' || peekFrame) return;
+  peekFrame = requestAnimationFrame(() => { peekFrame = 0; peekFadedMark(e.clientX, e.clientY); });
+});
+map.getContainer().addEventListener('pointerleave', () => peekFadedMark(null, null));
 
 map.on('dblclick', (e) => {
   if (state.mode !== 'design') return;

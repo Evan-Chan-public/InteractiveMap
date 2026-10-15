@@ -149,10 +149,11 @@ export function consolidateRegion(regionId) {
 function refreshRegionGeometry(region) {
   const group = layers.regions[region.id];
   if (!group) return;
-  const polys = [];
-  group.eachLayer(l => polys.push(l));
   region.polygons.forEach((ring, i) => {
-    if (polys[i]) polys[i].setLatLngs(ring.map(p => [p.lat, p.lng]));
+    const r = group.rings[i];
+    if (!r) return;
+    r.outline.setLatLngs(ring.map(p => [p.lat, p.lng]));
+    r.wash.setLatLngs(ring.map(p => [p.lat, p.lng]));
   });
 }
 

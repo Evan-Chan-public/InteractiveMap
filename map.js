@@ -14,3 +14,11 @@ export const map = L.map('map', {
 
 // the map image sits in its own pane under the annotations (overlayPane is z-index 400)
 map.createPane('mapImage').style.zIndex = 350;
+
+// regions are drawn in layers around the outlines (overlayPane, 400): the colourist's band of pigment
+// just under them, the veil outside a drilled-into region above them, and region names over that,
+// under the place marks (markerPane, 600)
+map.createPane('regionWash').style.zIndex = 395;
+map.createPane('drillVeil').style.zIndex  = 450;
+map.createPane('regionNames').style.zIndex = 550;
+map.getPane('regionNames').style.pointerEvents = 'none';
