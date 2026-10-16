@@ -10,7 +10,6 @@
 :root {
   --detail-width: clamp(300px, 32vw, 420px);
   --flap-width:   260px;
-  --flap-tucked:  40px;
 
   --font-ui:      'Alegreya', 'Iowan Old Style', Georgia, serif;
   --font-label:   'Alegreya SC', 'Alegreya', Georgia, serif;
@@ -185,6 +184,9 @@ body {
 .panel-right .panel-header { justify-content: flex-end; }
 
 /* the leaf: vellum, worn a little at the edge */
+/* reading a place's note needs less room than editing it */
+body:not(.designing) { --detail-width: clamp(260px, 24vw, 340px); }
+
 .panel-right {
   width: var(--detail-width);
   background: var(--grain), var(--leaf);
@@ -428,26 +430,26 @@ body {
 
 .flap-fold:hover { background: var(--leaf-sunk); border-color: var(--rule); color: var(--ink); }
 
-/* folded: the leaf tucks into a strip by the roll, lettered with the tool's name; anywhere on it
-   unfolds it */
-.flap.is-folded {
-  width: var(--flap-tucked);
-  padding: 8px 0;
-  cursor: pointer;
+/* folded away: no flap at all. The tool's pocket keeps a gilt tab, the leaf tucked behind it, and
+   clicking the pocket unfolds it */
+.flap-folded .pocket.active::before {
+  content: '';
+  position: absolute;
+  left: calc(100% + 1px);
+  top: 50%;
+  width: 4px;
+  height: 20px;
+  border-radius: 0 2px 2px 0;
+  background: var(--gilt);
+  transform: translateY(-50%);
 }
 
-.flap.is-folded:hover { background: var(--grain), var(--leaf-raised); }
-.flap.is-folded > :not(.flap-head) { display: none; }
-.flap.is-folded .flap-head { flex-direction: column; align-items: center; gap: 12px; }
-.flap.is-folded .flap-title { writing-mode: vertical-rl; font-size: 17px; margin: 0; }
-.flap.is-folded .flap-fold { margin: 0; }
-.flap.is-folded .flap-fold svg { transform: scaleX(-1); }
+.flap-folded .pocket.active::after { content: "Unfold " attr(data-tip) "  ·  " attr(data-key); }
 
 /* on a desk the zoom sits bottom-left; it moves clear of the leaf while one is out */
 @media (min-width: 641px) {
   .leaflet-top.leaflet-left { transition: transform 0.4s var(--ease-ink); }
   .flap-open .leaflet-top.leaflet-left { transform: translateX(var(--flap-width)); }
-  .flap-folded .leaflet-top.leaflet-left { transform: translateX(var(--flap-tucked)); }
 }
 
 .flap-title {
@@ -980,22 +982,28 @@ body {
   position: absolute;
   left: 0;
   top: 0;
-  transform: translate(-50%, -50%);
   white-space: nowrap;
   font-family: var(--map-label-font);
   font-size: 16px;
   font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.18em;
   text-transform: uppercase;
-  padding-left: 0.18em; /* balance the tracking after the last letter */
   color: var(--map-ink);
   opacity: 0.72;
   text-shadow: 0 0 2px var(--map-halo), 0 0 2px var(--map-halo), 0 0 4px var(--map-halo);
   transition: opacity 0.3s ease;
 }
+/* each capital is set on its own, turned to follow the region (labels.js places them) */
+.region-name i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-style: normal;
+  transform-origin: 0 0;
+}
 .region-name.is-selected span { opacity: 0.95; }
 .region-name.region-name-culled span { visibility: hidden; }
+.is-gliding .region-name span { opacity: 0 !important; }
 
 /* the hover slip is only for regions whose name isn't lettered */
 .leaflet-tooltip.is-redundant { display: none; }
@@ -1005,6 +1013,13 @@ body {
 .leaflet-marker-icon.layer-dim {
   opacity: 0.25;
 }
+
+/* Display Mode keeps what lies beneath out of sight until you drill into it; it settles in like ink */
+body:not(.designing) .leaflet-pane svg .layer-dim,
+body:not(.designing) .leaflet-marker-icon.layer-dim,
+body:not(.designing) .place-mark.layer-dim.is-peeked { opacity: 0; }
+body:not(.designing) .leaflet-pane svg path,
+body:not(.designing) .leaflet-marker-icon { transition: opacity 0.45s var(--ease-ink); }
 
 /* only the active layer is interactive; must outrank leaflet's .leaflet-interactive rule */
 .leaflet-pane > svg path.leaflet-interactive.layer-dim,
@@ -1530,7 +1545,8 @@ body {
 }
 
 .mark-picker {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 40px);
   gap: 6px;
 }
 
@@ -1995,15 +2011,19 @@ select.field-input {
   .flap-title { font-size: 20px; margin: 0; }
   .flap-fold { margin: 0; }
 
-  /* the sheet folds down: its arrows point down to fold and up to unfold */
+  /* the sheet folds down: its arrows point down */
   .flap-fold svg { transform: rotate(-90deg); }
-  .flap.is-folded .flap-fold svg { transform: rotate(90deg); }
 
-  /* folded on a phone: just the title line, with unfold and Put down */
-  .flap.is-folded { width: auto; padding: 8px 16px; cursor: default; }
-  .flap.is-folded .flap-head { flex-direction: row; gap: 8px; }
-  .flap.is-folded .flap-title { writing-mode: horizontal-tb; font-size: 20px; }
-  .flap.is-folded .flap-done { display: inline-flex; }
+  /* folded away on a phone: the tab sits on the pocket's top edge, toward where the sheet was */
+  .flap-folded .pocket.active::before {
+    display: block;
+    left: 50%;
+    top: -5px;
+    width: 20px;
+    height: 4px;
+    border-radius: 2px 2px 0 0;
+    transform: translateX(-50%);
+  }
   .flap-done { grid-column: 2; grid-row: 1; }
   .flap-rule { margin: 8px 0 10px; }
   .flap-howto { margin-bottom: 8px; }

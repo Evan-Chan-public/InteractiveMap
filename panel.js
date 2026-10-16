@@ -411,7 +411,7 @@ function renderMergePreview(source, target) {
 }
 
 function backButtonHtml() {
-  if (!navStack.length && state.mode === 'display') return ''; // the trail in the header leads back out
+  if (state.mode === 'display') return ''; // the trail in the header leads back out
   if (!navStack.length) {
     if (!showsLayerList()) return '';
     const layer = state.annotations.layers.find(l => l.id === state.ui.activeLayerId);

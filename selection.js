@@ -3,7 +3,7 @@
 import { layers, navStack, state } from './state.js';
 import { findAnnotation, parentInView } from './nesting.js';
 import { map } from './map.js';
-import { applyInteractivity, revealInView } from './render.js';
+import { applyInteractivity, drillFocus, revealInView } from './render.js';
 import { focusLabelOnce, renderDetailPanel } from './panel.js';
 import { renderLayerStrip } from './layerstrip.js';
 
@@ -34,6 +34,7 @@ export function selectAnnotation(type, id) {
   state.ui.selected = { type, id };
   followToLayer(type, id);
   renderDetailPanel();
+  followCamera();
 }
 
 // a just-created item opens with its label focused, ready to name it
@@ -48,6 +49,7 @@ export function navigateAnnotation(type, id) {
   state.ui.selected = { type, id };
   followToLayer(type, id);
   renderDetailPanel();
+  followCamera();
 }
 
 export function goBack() {
@@ -55,6 +57,7 @@ export function goBack() {
   state.ui.selected = navStack.pop();
   followToLayer(state.ui.selected.type, state.ui.selected.id);
   renderDetailPanel();
+  followCamera();
 }
 
 export function clearSelection() {
@@ -63,6 +66,7 @@ export function clearSelection() {
   state.ui.picked   = [];
   applyInteractivity();
   renderDetailPanel();
+  followCamera();
 }
 
 // MULTI-SELECTION — in Design Mode, shift-click (or a shift-drag box, select all, or the list's
@@ -105,11 +109,46 @@ export function goUp() {
   else clearSelection();
 }
 
+// CAMERA — in Display Mode the map follows every move through the tree: it glides to frame the place
+// you're in (a region you open, or the region around a place with nothing inside it, so its
+// neighbours stay in reach), and back out to the whole map when you leave. Design Mode moves only
+// for the panel's links, and only to bring a place into view
+
+const calm    = window.matchMedia('(prefers-reduced-motion: reduce)');
+const FRAME   = 40;  // px kept clear around a framed place
+const TOP     = 52;  // and under the layer tabs
+
+function glideTo(bounds) {
+  const flap = document.body.classList.contains('flap-open') && innerWidth > 640
+    ? document.getElementById('tool-flap').offsetWidth : 0;
+  const opts = { paddingTopLeft: [FRAME + flap, FRAME + TOP], paddingBottomRight: [FRAME, FRAME], maxZoom: map.getMaxZoom() };
+  if (calm.matches) map.fitBounds(bounds, opts);
+  else map.flyToBounds(bounds, { ...opts, duration: 0.8 });
+}
+
+// a place at the top with nothing inside it keeps the zoom, and only comes into view
+function bringIntoView(item) {
+  const bounds = item.polygons ? layers.regions[item.id]?.getBounds() : null;
+  if (bounds?.isValid()) { if (!map.getBounds().contains(bounds)) map.panTo(bounds.getCenter(), { animate: !calm.matches }); }
+  else if (item.latlng && !map.getBounds().contains(item.latlng)) map.panTo(item.latlng, { animate: !calm.matches });
+}
+
+export function followCamera() {
+  if (state.mode !== 'display' || !state.image) return;
+  const sel   = state.ui.selected;
+  const item  = sel && findAnnotation(sel.type, sel.id);
+  const focus = drillFocus();
+  const room  = focus && layers.regions[focus.id]?.getBounds();
+  if (room?.isValid()) glideTo(room);
+  else if (item) bringIntoView(item);
+  else glideTo(L.latLngBounds([[0, 0], [-state.image.height, state.image.width]]));
+}
+
+// the panel's links: Display Mode's camera has already moved with the selection
 export function panToItem(type, id) {
   const item = findAnnotation(type, id);
-  if (type === 'pin' && item) map.panTo(item.latlng);
-  if (type === 'region') {
-    const bounds = layers.regions[id]?.getBounds();
-    if (bounds?.isValid()) map.panTo(bounds.getCenter());
-  }
+  if (!item || state.mode === 'display') return;
+  const bounds = item.polygons ? layers.regions[id]?.getBounds() : null;
+  if (bounds?.isValid()) { if (!map.getBounds().contains(bounds)) glideTo(bounds); }
+  else if (item.latlng && !map.getBounds().contains(item.latlng)) map.panTo(item.latlng, { animate: !calm.matches });
 }

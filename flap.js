@@ -24,8 +24,8 @@ let mapOpen = false;
 export function isMapOpen() { return mapOpen; }
 export function setMapOpen(open) { mapOpen = open; renderFlap(); }
 
-// a tool's flap folds down to a slim tab to free the map's corner; the tool stays in hand, and
-// the next tool's flap opens folded too, until it's unfolded
+// a tool's flap folds away entirely to free the map; the tool stays in hand (its pocket carries a
+// tab, and clicking it unfolds the flap), and the next tool's flap opens folded too, until it's unfolded
 let folded = false;
 
 export function isFolded() { return folded; }
@@ -98,25 +98,20 @@ const TOOLS = {
   }),
 };
 
-// a folded flap is a strip lettered with the tool's name; anywhere on it unfolds it
-flap.addEventListener('click', (e) => {
-  if (flap.classList.contains('is-folded') && !e.target.closest('button')) setFolded(false);
-});
-
 export function renderFlap() {
-  const tool = state.mode === 'design' ? state.ui.activeTool : null;
-  const open = (tool && TOOLS[tool]) || (state.mode === 'design' && mapOpen);
+  const tool   = state.mode === 'design' ? state.ui.activeTool : null;
+  const tucked = !!(tool && TOOLS[tool]) && folded; // the map file's flap has Done instead
+  const open   = !tucked && ((tool && TOOLS[tool]) || (state.mode === 'design' && mapOpen));
   flap.classList.toggle('hidden', !open);
   document.body.classList.toggle('flap-open', !!open);
-  document.body.classList.toggle('flap-folded', !!open && !!tool && folded);
+  document.body.classList.toggle('flap-folded', tucked);
+  document.querySelectorAll('.pocket[aria-pressed]').forEach(p => {
+    if (p.classList.contains('active') && tool) p.setAttribute('aria-expanded', !tucked);
+    else p.removeAttribute('aria-expanded');
+  });
   if (!open) return;
 
-  const tucked = !!tool && folded; // the map file's flap has Done instead
-  flap.classList.toggle('is-folded', tucked);
   flapFold.classList.toggle('hidden', !tool);
-  flapFold.setAttribute('aria-expanded', !tucked);
-  flapFold.setAttribute('aria-label', tucked ? 'Unfold the flap' : 'Fold the flap away (the tool stays in hand)');
-  flapFold.title = tucked ? 'Unfold' : 'Fold away: the tool stays in hand';
 
   const spec = tool ? TOOLS[tool]() : { title: 'Map', howto: '', keys: [], part: 'map' };
   flapTitle.textContent = spec.title;

@@ -69,10 +69,20 @@ export const ICON_PIPETTE  = svg('<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9
 
 // PIN MARKS — the inked symbol beside a pin's name, as on an old map. Drawn in currentColor;
 // the ring's hollow and the gaps between the cairn's stones take the halo colour (.mark-halo in CSS)
+// a place's mark, drawn as an old map draws it (14×14, inked in currentColor; the halo classes keep
+// a mark legible on a busy map). Unknown marks, like an older map's cairn, show as the dot
 export const PIN_MARKS = {
-  dot:   { title: 'Dot',   body: '<circle cx="7" cy="7" r="3.6" fill="currentColor"/>' },
-  ring:  { title: 'Ring',  body: '<circle class="mark-halo-fill" cx="7" cy="7" r="3.8" stroke="currentColor" stroke-width="1.7"/>' },
-  cairn: { title: 'Cairn', body: '<g class="mark-halo-stroke" fill="currentColor" stroke-width="0.7"><ellipse cx="7" cy="11.2" rx="5.4" ry="2.1"/><ellipse cx="7.3" cy="8" rx="4" ry="1.8"/><ellipse cx="6.8" cy="5.1" rx="2.8" ry="1.5"/><ellipse cx="7.1" cy="2.6" rx="1.6" ry="1.2"/></g>' },
+  dot:       { title: 'Dot', body: '<circle cx="7" cy="7" r="3.6" fill="currentColor"/>' },
+  ring:      { title: 'Ring', body: '<circle class="mark-halo-fill" cx="7" cy="7" r="3.8" stroke="currentColor" stroke-width="1.7"/>' },
+  star:      { title: 'Star', body: '<path class="mark-halo-stroke" stroke-width="0.6" fill="currentColor" d="M7 1.2l1.65 3.6 3.95.45-2.95 2.7.82 3.9L7 9.85l-3.47 2 .82-3.9-2.95-2.7 3.95-.45z"/>' },
+  town:      { title: 'Town', body: '<path class="mark-halo-stroke" stroke-width="0.6" fill="currentColor" d="M1.3 12.5V7.6L4 5.1l2.7 2.5v4.9zM7.3 12.5V5.4l1.1-.9V1.6h1.1v2l2.9 2.3v6.6z"/><path class="mark-halo-fill" d="M3.4 12.5v-2h1.2v2zM9.3 12.5v-2.2h1.3v2.2z"/>' },
+  castle:    { title: 'Castle', body: '<path class="mark-halo-stroke" stroke-width="0.6" fill="currentColor" d="M2.2 12.6V3.4h1.9v1.5h1.5V3.4h2.8v1.5h1.5V3.4h1.9v9.2z"/><path class="mark-halo-fill" d="M5.6 12.6V9.7a1.4 1.4 0 0 1 2.8 0v2.9z"/>' },
+  monastery: { title: 'Monastery', body: '<g class="mark-halo-stroke" stroke-width="0.6" fill="currentColor"><path d="M6.05 1.2h1.9v3h3.1v1.9H7.95v4.5h-1.9V6.1H2.95V4.2h3.1z"/><path d="M4.6 12.8l.7-2.2h3.4l.7 2.2z"/></g><circle cx="7" cy="5.15" r="2.35" fill="none" stroke="currentColor" stroke-width="1.1"/>' },
+  mountain:  { title: 'Mountain', body: '<path class="mark-halo-stroke" stroke-width="0.6" fill="currentColor" d="M.8 12.3L5.4 3.3l2.3 4.2 1.4-2.2 4.1 7z"/><path class="mark-halo-fill" d="M5.4 3.3l1 4.6-1.6 1.6 2.1 2.8H5.6L3.9 9.5l1.4-1.8z" opacity="0.55"/>' },
+  forest:    { title: 'Forest', body: '<path class="mark-halo-stroke" stroke-width="0.6" fill="currentColor" d="M4.6 1.6l3 4.3H6.2l2.3 3.4H5.3v2.9H3.9V9.3H.7L3 5.9H1.6zM10.2 4.2l2.4 3.6h-1.1l1.9 2.8h-2.5v1.9H9.7v-1.9H7.4L9.3 7.8H8.2z"/>' },
+  lake:      { title: 'Lake', body: '<path class="mark-halo-stroke" stroke-width="3.2" stroke-linecap="round" fill="none" d="M1.6 4.6q1.35-1.5 2.7 0t2.7 0 2.7 0 2.7 0M1.6 8.1q1.35-1.5 2.7 0t2.7 0 2.7 0 2.7 0M3 11.6q1.35-1.5 2.7 0t2.7 0 2.7 0"/><path stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none" d="M1.6 4.6q1.35-1.5 2.7 0t2.7 0 2.7 0 2.7 0M1.6 8.1q1.35-1.5 2.7 0t2.7 0 2.7 0 2.7 0M3 11.6q1.35-1.5 2.7 0t2.7 0 2.7 0"/>' },
+  port:      { title: 'Port', body: '<path class="mark-halo-stroke" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none" d="M7 4.2v8.4M4.4 5.6h5.2M2.4 8.6q.6 3.9 4.6 4 4-.1 4.6-4"/><g stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"><circle cx="7" cy="2.6" r="1.4"/><path d="M7 4.2v8.4M4.4 5.6h5.2M2.4 8.6q.6 3.9 4.6 4 4-.1 4.6-4"/></g><path fill="currentColor" d="M1.2 9.6l1.2-2 1.2 2zM10.4 9.6l1.2-2 1.2 2z"/>' },
+  ford:      { title: 'Ford or bridge', body: '<path class="mark-halo-stroke" stroke-width="0.6" fill="currentColor" d="M.6 8.6Q7 3.4 13.4 8.6v3.9h-1.5a2 2.2 0 0 0-4 0H6.1a2 2.2 0 0 0-4 0H.6z"/>' },
 };
 export const DEFAULT_MARK = 'dot';
 

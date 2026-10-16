@@ -48,6 +48,7 @@ function setMode(mode) {
   const design = mode === 'design';
   toolsPanel.classList.toggle('hidden', !design);
   document.body.classList.toggle('designing', design);
+  map.invalidateSize(); // the leaf is narrower for reading than for editing
   btnMode.setAttribute('aria-checked', design);
   if (design) map.boxZoom.disable(); else map.boxZoom.enable(); // design: shift-drag selects (or paints)
   if (!design) {
@@ -126,7 +127,9 @@ function setMap(open) {
   setMapOpen(open);
 }
 
+// the tool in hand with its flap folded away: its pocket (or key) unfolds the flap first
 function toggleTool(name) {
+  if (state.ui.activeTool === name && isFolded()) { setFolded(false); return; }
   setActiveTool(state.ui.activeTool === name ? null : name);
 }
 
@@ -138,8 +141,11 @@ btnMap.addEventListener('click', () => {
   if (isMapOpen() && !phone.matches) document.getElementById('project-title').focus();
 });
 
-// folding the flap down to a tab keeps the tool in hand and frees the map's corner
-btnFlapFold.addEventListener('click', () => setFolded(!isFolded()));
+// folding the flap away keeps the tool in hand and frees the map; the keyboard goes to its pocket
+btnFlapFold.addEventListener('click', () => {
+  setFolded(true);
+  TOOL_BTNS[state.ui.activeTool]?.focus();
+});
 
 // putting the tool down hands focus back to its pocket
 btnFlapDone.addEventListener('click', () => {
@@ -149,6 +155,8 @@ btnFlapDone.addEventListener('click', () => {
 });
 
 // MAP EVENTS
+
+const mapEl = map.getContainer();
 
 // display: a click outside the drill-down (or the selection) leaves it for the outermost layer.
 // clicks inside it reach here through faded items and the frame, and are ignored
@@ -173,6 +181,9 @@ map.on('click', (e) => {
 // pin names are placed in screen space: re-letter after the view changes, and once the map
 // typeface has loaded (names change width)
 map.on('zoomend moveend resize', scheduleLabelLayout);
+// region names are lettered for one zoom: while the camera glides between zooms they're lifted off
+map.on('zoomstart', () => mapEl.classList.add('is-gliding'));
+map.on('zoomend', () => mapEl.classList.remove('is-gliding'));
 document.fonts?.ready.then(lettersLoaded);
 
 // pins and regions are buttons: Enter or Space selects the focused one (Leaflet only makes them focusable);
@@ -184,7 +195,6 @@ map.getContainer().addEventListener('keydown', (e) => {
 // SHIFT-DRAG — Design Mode, no tool in hand: a box drawn with shift held gathers what lies wholly
 // inside it on the layer, adding to what's already selected. (A shift-click without a drag is left
 // to the place clicked.) Display Mode keeps Leaflet's shift-drag zoom
-const mapEl = map.getContainer();
 let gather  = null; // { x, y, box }
 
 const gathersHere = (e) => state.mode === 'design' && !state.ui.activeTool && e.shiftKey && e.button === 0;

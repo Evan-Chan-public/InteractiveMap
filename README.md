@@ -13,12 +13,12 @@ The default view. Regions and pins are visible and selectable; clicking them ope
 
 From the keyboard, `Tab` reaches the regions and pins you can use; a dashed oxblood line shows which has focus, a focused region shows its name, and `Enter` or `Space` opens it.
 
-Clicking a region drills into it: the region keeps its painted border, its children become clickable (whichever layer they're on), and everything outside it is veiled. Selecting something with no children keeps its siblings clickable. `Esc` or the back button (named after the parent) goes up a level; at the top level it returns to browsing the active layer. Clicking the map outside the area you're in (or outside the selected item) deselects and returns to the outermost layer; clicks inside it that miss a child do nothing. Clicking a layer chip leaves the drill-down and browses that layer. Hidden regions are skipped, so their children appear under the next visible ancestor.
+Clicking a region drills into it: the map glides in to frame it, the region keeps its painted border, its children become clickable (whichever layer they're on), and everything outside it is veiled. Layers beneath the one you're browsing stay out of sight until you drill into them. Selecting something with no children keeps its parent framed and its siblings clickable. The panel's tree works the same way: a place in its **Contains** list, or one in the trail at its top, moves the map and the layer tab with it. `Esc` goes up a level (the map zooms back out with it); at the top level it returns to browsing the active layer and the whole map. Clicking the map outside the area you're in (or outside the selected item) deselects and returns to the outermost layer; clicks inside it that miss a child do nothing. Clicking a layer chip leaves the drill-down and browses that layer. Hidden regions are skipped, so their children appear under the next visible ancestor.
 
 ### Design Mode
-Switch with the **Display / Design** switch (top right). Design Mode exposes the editing tools and lets you create, modify, and delete annotations.
+Switch with the **Design / Display** switch (top right). Design Mode exposes the editing tools and lets you create, modify, and delete annotations.
 
-The tools are a narrow roll down the left edge (on a phone, a row along the bottom). Pick one by clicking its pocket or pressing its letter: `P` pin, `R` region, `F` flood, `V` vertices, `B` brush, `E` eraser (never while typing). The tool in hand turns gilt and a flap opens beside the roll with how to use it here, its settings and its keys; **Put down**, its pocket or its letter again puts it down. The flap's **«** folds it down to a tab to free the map's corner, keeping the tool in hand. The **Map** pocket at the foot of the roll holds the map file (see below); a dot on it means its flap has news.
+The tools are a narrow roll down the left edge (on a phone, a row along the bottom). Pick one by clicking its pocket or pressing its letter: `P` pin, `R` region, `F` flood, `V` vertices, `B` brush, `E` eraser (never while typing). The tool in hand turns gilt and a flap opens beside the roll with how to use it here, its settings and its keys; **Put down**, its pocket or its letter again puts it down. The flap's **«** folds it away to free the map, keeping the tool in hand: its pocket keeps a small gilt tab, and clicking the pocket (or pressing its letter) unfolds the flap again. The **Map** pocket at the foot of the roll holds the map file (see below); a dot on it means its flap has news.
 
 ---
 
@@ -44,7 +44,7 @@ Pins are lettered onto the map like places on an old map: a small inked mark wit
 - **Add Pin** tool: click anywhere on the map (including on top of regions) to place a pin.
 - Click a pin (its mark or its name) to select it and view/edit its label and description in the detail panel. The selected pin gets a gilt ring and underline.
 - From the keyboard, `Tab` moves between the pins you can use (faded ones are skipped), a dashed ring shows which has focus, and `Enter` or `Space` selects it. Screen readers announce each pin by name.
-- **Mark** (editor): a dot, a ring or a cairn. It's saved with the pin.
+- **Mark** (editor): a dot, a ring, a star, a town, a castle, a monastery, a mountain, a forest, a lake, a port or a ford, drawn like an old map's symbols. It's saved with the pin; a mark this version doesn't know shows as a dot.
 - Pins on faded layers show only their mark, so other layers don't crowd the map with names.
 - **Names don't collide.** Each name sits to the right of its mark, or to the left, above or below when that's taken or would run off screen; a name with no free spot is left off until you zoom in (hover its mark to read it). Names on lower layers are placed first, so zooming out keeps the broad places and thins the detail. The selected pin always shows its name. Long names wrap onto several lines.
 
@@ -61,7 +61,7 @@ With a region selected in the detail panel:
 - **Consolidate**: collapses a multi-ring region (e.g. two disconnected blobs) into a single contiguous polygon by bridging near-touching rings.
 
 ### Color
-Each region has an assigned color, visible as a swatch in the region list and on the map, where it's painted like a hand-coloured old map: a band of colour along the inside of the border, a thin inked edge and a faint wash inside. Region names are lettered across the regions you can use, in spaced capitals; a name that doesn't fit (or would cover a pin) is left off, and hovering the region shows it instead. Pins on faded layers show their name when the mouse rests on them. New regions take the next of eight pigments (woad, minium, verdigris, orpiment, folium, kermes, moss, ochre); the editor's **Color** picker offers seventeen named pigments or any custom colour.
+Each region has an assigned color, visible as a swatch in the region list and on the map, where it's painted like a hand-coloured old map: a band of colour along the inside of the border, a thin inked edge and a faint wash inside. Region names are lettered inside the regions you can use, in spaced capitals set along the shape's length and bending with it, the way an old map letters a province; a long region gets a name spread along it, a tall one a name that reads upward. A name slides along or across its region to keep clear of pins, falls back to straight across the middle when the shape is too twisted to follow, and is left off only when it can't fit at all (hovering the region then shows it). In Design Mode, pins on faded layers show their name when the mouse rests on them. New regions take the next of eight pigments (woad, minium, verdigris, orpiment, folium, kermes, moss, ochre); the editor's **Color** picker offers seventeen named pigments or any custom colour.
 
 ### Labels and Descriptions
 All annotations have a **label** and a **description** field. Descriptions support Markdown (rendered in display mode).
@@ -87,7 +87,7 @@ Select an item (or several) in Design Mode and press `Backspace` / `Delete`, or 
 `Ctrl+Z` / `Ctrl+Shift+Z` (or `Ctrl+Y`). Up to 50 steps of history.
 
 ### Navigation
-Clicking a related pin in a region's detail panel (or vice versa) pushes a back-navigation entry, letting you return with the **←** button.
+Clicking a related pin in a region's detail panel (or vice versa) pushes a back-navigation entry; in Design Mode the **←** button returns to it. In Display Mode the trail at the top of the panel leads back out.
 
 ### Layers
 The layer strip (top-left) lists layers bottom → top; higher layers draw above lower ones.
@@ -178,10 +178,10 @@ Saved data lives in this browser only. Use **Export** to keep a copy or move a m
 The app uses ES modules and a Web Worker, so it must be served over HTTP. Opening `index.html` directly as a `file://` URL will not work.
 
 ```bash
-python3 -m http.server 8080   # or: npx serve .
+python3 serve.py   # or: python3 serve.py 8000
 ```
 
-Then open `http://localhost:8080`.
+Then open `http://localhost:8080`. `serve.py` is Python's built-in server with browser caching turned off, so a plain reload always runs the code you just changed (`python3 -m http.server` works too, but the browser may keep running old scripts until a hard reload).
 
 **Flood Region** runs on a small WebAssembly module (`processor.js` + `processor.wasm`) that isn't in the repo, so a fresh clone has to build it once (below). Everything else works without it.
 
